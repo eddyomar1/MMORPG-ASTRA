@@ -1,7 +1,7 @@
 import { schema, t, type SchemaType } from '@colyseus/schema';
 
 export const PlayerState = schema({
-  name: t.string().default(''), color: t.string().default(''),
+  name: t.string().default(''), color: t.string().default(''), classType: t.string().default('traveler'),
   x: t.float32().default(0), z: t.float32().default(17), yaw: t.float32().default(Math.PI),
   hp: t.float32().default(120), maxHp: t.uint16().default(120), level: t.uint8().default(1),
   moving: t.boolean().default(false), attackUntil: t.float32().default(0),

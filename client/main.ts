@@ -1,5 +1,5 @@
 import { Client, type Room } from '@colyseus/sdk';
-import { COLORS, ENEMIES, ITEMS, NPC, OBSTACLES, QUESTS, WORLD, questReady, xpForLevel, type EnemyKind, type ItemKind, type Profile } from '../shared/content';
+import { CHARACTER_CLASSES, COLORS, ENEMIES, ITEMS, NPC, OBSTACLES, QUESTS, WORLD, questReady, xpForLevel, type CharacterClass, type EnemyKind, type ItemKind, type Profile } from '../shared/content';
 import type { WorldState } from '../shared/schema';
 import { WorldView } from './scene';
 import { $, escapeHTML as esc, icon, mountUI, showModal, toast } from './ui';
@@ -20,10 +20,19 @@ function read(key: string) { try { return localStorage.getItem(key); } catch { r
 function save(key: string, value: string) { try { localStorage.setItem(key, value); } catch { toast('No se pudo guardar el acceso en este navegador. Exporta tu acceso desde Ajustes.'); } }
 let token = read('astra-token');
 if (!token || !/^[a-f0-9]{64}$/.test(token)) { token = [...crypto.getRandomValues(new Uint8Array(32))].map(n => n.toString(16).padStart(2, '0')).join(''); save('astra-token', token); }
+const savedClass = read('astra-class') as CharacterClass | null;
+let selectedClass: CharacterClass = savedClass && savedClass in CHARACTER_CLASSES ? savedClass : 'traveler';
 $<HTMLInputElement>('name').value = read('astra-name') || '';
 color = COLORS.includes(read('astra-color') || '') ? read('astra-color')! : COLORS[0];
 function colors() { $('colors').innerHTML = COLORS.map((c, i) => `<button type="button" aria-label="Estandarte ${['jade', 'ámbar', 'amatista', 'oro'][i]}" aria-pressed="${c === color}" data-color="${c}" class="color-choice ${c === color ? 'selected' : ''}" style="--swatch:${c}"></button>`).join(''); $('colors').querySelectorAll<HTMLButtonElement>('button').forEach(b => b.onclick = () => { color = b.dataset.color!; colors(); }); }
-colors();
+function updateClassLabel() {
+  const info = CHARACTER_CLASSES[selectedClass];
+  $('class-label').textContent = info.label;
+  $('class-label').title = info.description;
+  $('classes').innerHTML = Object.entries(CHARACTER_CLASSES).map(([key, info]) => `<button type="button" data-class="${key}" class="class-choice ${selectedClass === key ? 'selected' : ''}" style="--swatch:${info.color}; --glow:${info.accent}"><span>${info.name}</span></button>`).join('');
+  $('classes').querySelectorAll<HTMLButtonElement>('button').forEach(b => b.onclick = () => { selectedClass = b.dataset.class as CharacterClass; save('astra-class', selectedClass); updateClassLabel(); });
+}
+colors(); updateClassLabel();
 async function loadServerInfo() {
   const response = await fetch('/api/server', { signal: AbortSignal.timeout(4000) });
   if (!response.ok) throw new Error('El servidor no responde.'); serverInfo = await response.json(); $('lobby-count').textContent = String(serverInfo.players);
@@ -38,15 +47,17 @@ async function join() {
   joining = true; $('join-error').textContent = ''; $<HTMLButtonElement>('join').disabled = true; $('join').textContent = 'Abriendo las puertas…';
   try {
     await loadServerInfo();
-    const next = await client.joinById<WorldState>(serverInfo.roomId, { token, name, color });
+    const next = await client.joinById<WorldState>(serverInfo.roomId, { token, name, color, classType: selectedClass });
     next.reconnection.minUptime = 0;
-    room = next; connected = true; view.selfId = room.sessionId; view.playing = true; view.state = room.state;
+    // The join handshake precedes the first full state packet. Rendering an
+    // empty reflected schema here would stop Babylon's render loop.
+    room = next; connected = true; view.selfId = room.sessionId; view.playing = true; view.state = undefined;
     view.camera.alpha = Math.PI / 2; view.camera.beta = 0.87; view.camera.radius = 23; view.camera.upperRadiusLimit = 36;
     $('welcome').hidden = true; $('hud').hidden = false; $('connection-lost').hidden = true; $('connection').textContent = 'Conectado';
     $('tutorial').hidden = read('astra-tutorial') === 'done';
     save('astra-name', name); save('astra-color', color);
-    room.onStateChange(state => { view.state = state; });
-    room.onMessage('profile', (p: Profile) => { profile = p; save('astra-name', p.name); updateProfile(); });
+    room.onStateChange(state => { if (state.players && state.enemies && state.loot) view.state = state; });
+    room.onMessage('profile', (p: Profile) => { profile = p; save('astra-name', p.name); if (p.classType) { selectedClass = p.classType; updateClassLabel(); } updateProfile(); });
     room.onMessage('notice', (message: string) => toast(message));
     room.onMessage('chat', (message: { name: string; text: string; system: boolean }) => {
       const line = document.createElement('p'); line.className = message.system ? 'system' : '';
@@ -117,8 +128,7 @@ setInterval(() => {
 setInterval(() => { if (connected) { send('ping', performance.now()); $('fps').textContent = `${view.fps} FPS`; } }, 2000);
 function updateProfile() {
   if (!profile) return;
-  $('player-name').textContent = profile.name; $('level-badge').textContent = String(profile.level);
-  $('gold').textContent = `${profile.gold} ◈`; $('xp-text').textContent = profile.level === 5 ? 'NIVEL MÁXIMO' : `${profile.xp} / ${xpForLevel(profile.level)} EXP`;
+  $('player-name').textContent = profile.name; $('level-badge').textContent = String(profile.level); const classInfo = CHARACTER_CLASSES[profile.classType ?? selectedClass]; $('class-label').textContent = classInfo.label; $('gold').textContent = `${profile.gold} ◈`; $('xp-text').textContent = profile.level === 5 ? 'NIVEL MÁXIMO' : `${profile.xp} / ${xpForLevel(profile.level)} EXP`;
   $('xp-fill').style.width = `${profile.level === 5 ? 100 : profile.xp / xpForLevel(profile.level) * 100}%`;
   $('potion-count').textContent = String(profile.inventory.find(i => i.kind === 'potion')?.count ?? 0);
   const quest = QUESTS[profile.quest];

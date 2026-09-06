@@ -8,6 +8,7 @@ test('two browsers can enter, chat, accept a quest, open inventory and retain a 
   await page.screenshot({ path: 'test-results/astra-welcome.png' });
   await page.locator('#name').fill('Exploradora'); await page.locator('#join').click();
   await expect(page.locator('#hud')).toBeVisible(); await expect(page.locator('#player-name')).toHaveText('Exploradora');
+  await expect(page.locator('#labels .world-label')).toHaveCount(13);
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
   const context = await browser.newContext({ viewport: { width: 960, height: 720 } }); const friend = await context.newPage();
   await friend.addInitScript(() => localStorage.setItem('astra-low', 'yes'));

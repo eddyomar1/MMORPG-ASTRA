@@ -57,6 +57,7 @@ El inventario permite equipar las espadas encontradas. Estando junto a Elara, pu
 
 - Aldea segura, bosque y ruinas; escenario low-poly original generado con geometría local.
 - Cámara orbital en tercera persona; personajes y criaturas con animación procedural.
+- Apariencias Viajero, Guardián y Mago y color de estandarte. Son opciones visuales; comparten las mismas reglas de combate en esta entrega.
 - Brotes silvestres, jabalíes, ecos y el Guardián del umbral.
 - Combate cooperativo, dos habilidades, pociones, muerte y reaparición.
 - Experiencia, niveles 1–5, oro, botín, inventario y armas equipables.

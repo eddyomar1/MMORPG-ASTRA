@@ -1,5 +1,5 @@
 import { EnemyState, LootState, PlayerState, WorldState } from '../shared/schema.js';
-import { COLORS, ENEMIES, ITEMS, NPC, QUESTS, SPAWNS, WORLD, canStand, clearLine, emptyKills, maxHealth, moveWithCollisions, newProfile, questReady, xpForLevel, type EnemyKind, type ItemKind, type Profile } from '../shared/content.js';
+import { CHARACTER_CLASSES, COLORS, ENEMIES, ITEMS, NPC, QUESTS, SPAWNS, WORLD, canStand, clearLine, emptyKills, maxHealth, moveWithCollisions, newProfile, questReady, xpForLevel, type CharacterClass, type EnemyKind, type ItemKind, type Profile } from '../shared/content.js';
 import type { CharacterStore } from './database.js';
 
 type Event = { type: string; data: unknown; to?: string };
@@ -22,11 +22,13 @@ export class GameWorld {
       this.state.enemies.set(`e${i}`, e);
     });
   }
-  add(id: string, token: string, name: string, color: string) {
+  add(id: string, token: string, name: string, color: string, classType: CharacterClass = 'traveler') {
     if ([...this.tokens.values()].includes(token)) throw new Error('Este personaje ya está conectado en otra pestaña.');
-    const p = this.store.load(token) ?? newProfile(name, COLORS.includes(color) ? color : COLORS[0]);
+    const safeClass = Object.hasOwn(CHARACTER_CLASSES, classType) ? classType : 'traveler';
+    const p = this.store.load(token) ?? newProfile(name, COLORS.includes(color) ? color : COLORS[0], safeClass);
+    if (!Object.hasOwn(CHARACTER_CLASSES, p.classType ?? '')) p.classType = safeClass;
     p.cooldowns = {}; this.profiles.set(id, p); this.tokens.set(id, token);
-    const player = new PlayerState(); Object.assign(player, { name: p.name, color: p.color, level: p.level, hp: maxHealth(p.level), maxHp: maxHealth(p.level), x: WORLD.spawnX + (this.state.players.size % 3) * 1.3, z: WORLD.spawnZ });
+    const player = new PlayerState(); Object.assign(player, { name: p.name, color: p.color, classType: p.classType, level: p.level, hp: maxHealth(p.level), maxHp: maxHealth(p.level), x: WORLD.spawnX + (this.state.players.size % 3) * 1.3, z: WORLD.spawnZ });
     this.state.players.set(id, player); this.changed(id);
     this.emit({ type: 'chat', data: { name: 'Valle', text: `${p.name} ha llegado a la aldea.`, system: true } });
   }

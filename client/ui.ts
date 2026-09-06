@@ -31,7 +31,8 @@ export function mountUI() {
       <h1>El valle<br>te <em>espera.</em></h1>
       <p class="intro">Un antiguo poder despierta entre los árboles.<br>Encuentra tu camino. Comparte la aventura.</p>
       <form id="join-form"><label for="name">EL NOMBRE DE TU HISTORIA</label><input id="name" maxlength="18" minlength="2" required placeholder="Nombre de tu personaje" autocomplete="nickname" />
-      <div class="character-choice"><span>Tu estandarte</span><div id="colors" role="group" aria-label="Color del personaje"></div><span class="class-label">Clase · Viajero</span></div>
+      <div class="character-choice"><span>Tu estandarte</span><div id="colors" role="group" aria-label="Color del personaje"></div><span id="class-label" class="class-label">Clase · Viajero</span></div>
+      <div id="classes" class="classes-grid" role="group" aria-label="Clase del personaje"></div>
       <button id="join" class="primary" type="submit">Entrar al valle ${icon('arrow')}</button><p id="join-error" class="error" role="alert"></p></form>
       <div class="welcome-meta"><span><i class="status-dot"></i><b id="lobby-count">0</b>/8 aventureros</span><span>3D · Cooperativo · Red local</span></div>
       <button id="import-access" class="subtle-link">Recuperar un personaje</button><input id="access-file" type="file" accept="application/json,.json" hidden />

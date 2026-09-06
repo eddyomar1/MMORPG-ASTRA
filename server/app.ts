@@ -5,7 +5,7 @@ import { networkInterfaces } from 'node:os';
 import { resolve } from 'node:path';
 import { CharacterStore } from './database.js';
 import { GameWorld } from './world.js';
-import { WORLD } from '../shared/content.js';
+import { CHARACTER_CLASSES, WORLD } from '../shared/content.js';
 import type { WorldState } from '../shared/schema.js';
 
 export async function createGameServer({ port = 3000, dbPath = 'data/astra.sqlite', dev = false, host = '0.0.0.0' } = {}) {
@@ -36,13 +36,14 @@ export async function createGameServer({ port = 3000, dbPath = 'data/astra.sqlit
     }
     onAuth(_client: Client, options: unknown) {
       if (!options || typeof options !== 'object') throw new Error('Datos de acceso inválidos.');
-      const { token, name } = options as Record<string, unknown>;
+      const { token, name, classType } = options as Record<string, unknown>;
       if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) throw new Error('Identidad inválida. Recarga el juego.');
       if (typeof name !== 'string' || !/^[\p{L}\p{N} _-]{2,18}$/u.test(name.trim())) throw new Error('Usa un nombre de 2–18 letras o números.');
+      if (classType != null && (typeof classType !== 'string' || !Object.hasOwn(CHARACTER_CLASSES, classType))) throw new Error('Clase de personaje inválida.');
       return true;
     }
-    onJoin(client: Client, options: { token: string; name: string; color: string }) {
-      world.add(client.sessionId, options.token, options.name.trim(), options.color);
+    onJoin(client: Client, options: { token: string; name: string; color: string; classType?: keyof typeof CHARACTER_CLASSES }) {
+      world.add(client.sessionId, options.token, options.name.trim(), options.color, options.classType ?? 'traveler');
     }
     async onDrop(client: Client) {
       const player = world.state.players.get(client.sessionId); if (player) { player.connected = false; player.moving = false; }
@@ -55,7 +56,8 @@ export async function createGameServer({ port = 3000, dbPath = 'data/astra.sqlit
     onLeave(client: Client) { world.remove(client.sessionId); }
     onDispose() { world.saveAll(); }
   }
-  const addresses = Object.values(networkInterfaces()).flat().filter(i => i && i.family === 'IPv4' && !i.internal).map(i => `http://${i!.address}:${port}`);
+  const currentAddresses = () => Object.values(networkInterfaces()).flat().filter(i => i && i.family === 'IPv4' && !i.internal).map(i => `http://${i!.address}:${port}`);
+  const addresses = currentAddresses();
   let vite: Awaited<ReturnType<typeof import('vite')['createServer']>> | undefined;
   if (dev) {
     const { createServer } = await import('vite');
@@ -66,7 +68,7 @@ export async function createGameServer({ port = 3000, dbPath = 'data/astra.sqlit
     greet: false, gracefullyShutdown: false,
     express: app => {
       app.disable('x-powered-by');
-      app.get('/api/server', (_req, res) => res.json({ name: 'Valle de Auralia', roomId: 'valle', maxPlayers: WORLD.maxPlayers, players: world?.state.players.size ?? 0, addresses }));
+      app.get('/api/server', (_req, res) => res.json({ name: 'Valle de Auralia', roomId: 'valle', maxPlayers: WORLD.maxPlayers, players: world?.state.players.size ?? 0, addresses: currentAddresses() }));
       app.get('/api/health', (_req, res) => res.json({ ok: true }));
       if (vite) app.use(vite.middlewares);
       else app.use(express.static(resolve('dist/client')));

@@ -102,9 +102,10 @@ test('SQLite restart preserves progress and private token prevents name imperson
   const dir = mkdtempSync(join(tmpdir(), 'astra-save-')); const path = join(dir, 'game.sqlite');
   try {
     let store = new CharacterStore(path); let world = new GameWorld(store); world.add('a', token, 'Alice', COLORS[0]);
-    const p = world.profiles.get('a')!; p.level = 3; p.gold = 75; p.quest = 1; p.inventory.push({ kind: 'iron', count: 1 }); p.weapon = 'iron'; world.saveAll(); store.close();
+    const p = world.profiles.get('a')!; p.level = 3; p.gold = 75; p.quest = 1; p.classType = 'mage'; p.inventory.push({ kind: 'iron', count: 1 }); p.weapon = 'iron'; world.saveAll(); store.close();
     store = new CharacterStore(path); world = new GameWorld(store); world.add('a2', token, 'Changed name', COLORS[2]);
     assert.equal(world.profiles.get('a2')!.name, 'Alice'); assert.equal(world.profiles.get('a2')!.level, 3); assert.equal(world.profiles.get('a2')!.gold, 75); assert.equal(world.profiles.get('a2')!.weapon, 'iron');
+    assert.equal(world.profiles.get('a2')!.classType, 'mage');
     assert.throws(() => world.add('duplicate', token, 'Alice', COLORS[0]), /ya está/);
     world.add('impostor', 'f'.repeat(64), 'Alice', COLORS[0]); assert.equal(world.profiles.get('impostor')!.level, 1); store.close();
   } finally { rmSync(dir, { recursive: true, force: true }); }

@@ -2,7 +2,13 @@ export const WORLD = { minX: -36, maxX: 36, minZ: -43, maxZ: 32, spawnX: 0, spaw
 export const NPC = { x: -4, z: 13, name: 'Elara', title: 'Guardiana del valle' };
 export const COLORS = ['#64b8ab', '#cf8d60', '#9595d4', '#c7b873'];
 export type EnemyKind = 'slime' | 'boar' | 'wisp' | 'warden';
+export type CharacterClass = 'traveler' | 'guardian' | 'mage';
 export type ItemKind = 'potion' | 'crystal' | 'iron' | 'astral';
+export const CHARACTER_CLASSES: Record<CharacterClass, { name: string; label: string; description: string; color: string; accent: string }> = {
+  traveler: { name: 'Viajero', label: 'Estilo · Viajero', description: 'Vestimenta jade para explorar el valle. Apariencia cosmética.', color: '#64b8ab', accent: '#d7f3dd' },
+  guardian: { name: 'Guardián', label: 'Estilo · Guardián', description: 'Vestimenta ámbar de los protectores del valle. Apariencia cosmética.', color: '#cf8d60', accent: '#f5d4a6' },
+  mage: { name: 'Mago', label: 'Estilo · Mago', description: 'Vestimenta amatista de los estudiosos del umbral. Apariencia cosmética.', color: '#9595d4', accent: '#d7ddff' },
+};
 export const ITEMS: Record<ItemKind, { name: string; description: string; icon: string; color: string }> = {
   potion: { name: 'Poción de vida', description: 'Recupera 65 de vida. También puedes usar R.', icon: '✚', color: '#dc8d82' },
   crystal: { name: 'Cristal del valle', description: 'Intercambia 3 cristales por una poción con Elara.', icon: '◇', color: '#79d4c3' },
@@ -24,13 +30,13 @@ export const xpForLevel = (level: number) => level * 90;
 export const maxHealth = (level: number) => 120 + (level - 1) * 25;
 export interface ItemStack { kind: ItemKind; count: number }
 export interface Profile {
-  name: string; color: string; level: number; xp: number; gold: number;
+  name: string; color: string; classType: CharacterClass; level: number; xp: number; gold: number;
   inventory: ItemStack[]; weapon: 'starter' | 'iron' | 'astral';
   quest: number; questAccepted: boolean; kills: Record<EnemyKind, number>;
   cooldowns: Record<string, number>;
 }
 export const emptyKills = (): Record<EnemyKind, number> => ({ slime: 0, boar: 0, wisp: 0, warden: 0 });
-export const newProfile = (name: string, color: string): Profile => ({ name, color, level: 1, xp: 0, gold: 0, inventory: [{ kind: 'potion', count: 5 }], weapon: 'starter', quest: 0, questAccepted: false, kills: emptyKills(), cooldowns: {} });
+export const newProfile = (name: string, color: string, classType: CharacterClass = 'traveler'): Profile => ({ name, color, classType, level: 1, xp: 0, gold: 0, inventory: [{ kind: 'potion', count: 5 }], weapon: 'starter', quest: 0, questAccepted: false, kills: emptyKills(), cooldowns: {} });
 export const questReady = (p: Profile) => p.questAccepted && p.quest < QUESTS.length && Object.entries(QUESTS[p.quest].targets).every(([kind, n]) => p.kills[kind as EnemyKind] >= n);
 export interface Obstacle { x: number; z: number; radius: number; kind: 'tree' | 'house' | 'rock' | 'pillar'; variant: number }
 export function randomSeed(seed: number) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
