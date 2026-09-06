@@ -1,0 +1,4 @@
+@media (max-width: 700px) {
+  .movement-controls { touch-action: none; }
+  #joystick, #attack { user-select: none; }
+}
