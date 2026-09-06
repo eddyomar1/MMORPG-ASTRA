@@ -2,31 +2,112 @@
 
 RPG 3D cooperativo para navegador, con un mundo compartido para **1–8 jugadores** en una red local. Tu PC ejecuta el servidor y sirve todos los recursos del juego. Incluye una aventura inicial de tres capítulos; es la base jugable de un MMORPG, con capacidad local limitada a ocho personajes simultáneos.
 
-## Inicio rápido
+## Ejecutar desde cero
 
-Necesitas **Node.js 24 o posterior**, npm y un navegador con WebGL y aceleración gráfica; el servidor se ejecuta en el PC. Los demás jugadores solo necesitan su navegador.
+Estos pasos se realizan en el **PC que hará de servidor**. Los amigos que se conecten desde otro PC, teléfono o tableta solo necesitan un navegador y estar en la misma red local.
+
+### 1. Instalar y comprobar los requisitos
+
+- Instala **Node.js 24**, con npm, desde la [página oficial de Node.js](https://nodejs.org/en/download). Es la versión de referencia del proyecto, indicada también en `.nvmrc`.
+- Instala [Git para tu sistema operativo](https://git-scm.com/install/) para clonar el repositorio.
+- Usa un navegador con WebGL y aceleración gráfica habilitada.
+
+Abre una terminal: PowerShell o Símbolo del sistema en Windows, Terminal en macOS o tu terminal habitual en Linux. Si acabas de instalar Node.js o Git, abre una terminal nueva. Comprueba:
 
 ```sh
+node --version
+npm --version
+git --version
+```
+
+`node --version` debe mostrar `v24.x.x` para seguir esta guía con la versión de referencia; los otros dos comandos deben mostrar sus versiones sin errores. Si ya usas nvm en Linux/macOS, después de entrar en la carpeta del proyecto puedes ejecutar `nvm install` y `nvm use` para utilizar `.nvmrc`.
+
+### 2. Clonar e instalar
+
+Copia la URL HTTPS de este repositorio desde tu proveedor de Git (por ejemplo, desde el botón Code en GitHub). **Sustituye `URL_DEL_REPOSITORIO` por esa URL real** antes de ejecutar:
+
+```sh
+git clone URL_DEL_REPOSITORIO astra
+cd astra
+npm ci
+```
+
+El último argumento de `git clone` fija el nombre de la carpeta en `astra`. Si ya clonaste el repositorio, omite la clonación y abre la terminal dentro de su carpeta: debes ver allí `package.json` y `package-lock.json`.
+
+`npm ci` instala las versiones fijadas en el archivo de dependencias. La primera instalación necesita Internet. SQLite viene integrado en Node.js y el juego crea su base de datos al arrancar. La configuración predeterminada permite jugar directamente; los hooks de Git y las pruebas son pasos opcionales para quienes contribuyan al código.
+
+### 3. Arrancar y abrir el juego
+
+Desde esa misma carpeta, ejecuta:
+
+```sh
+npm run play
+```
+
+Este comando comprueba TypeScript, compila el cliente y el servidor y arranca el juego. Espera a que la terminal muestre algo parecido a:
+
+```text
+✧ ASTRA · Crónicas del valle
+
+En este PC: http://localhost:3000
+Comparte una dirección de tu red local:
+  http://192.168.1.26:3000
+```
+
+Abre **http://localhost:3000** en el navegador del PC servidor, escribe un nombre de personaje y pulsa **Entrar al valle**. Si ves el mundo y los controles, el arranque se completó.
+
+La terminal permanece ocupada mientras el servidor está funcionando; eso es normal. El juego debe abrirse desde esa dirección HTTP: abrir `index.html` directamente o mediante una extensión de servidor estático no ejecuta el servidor multijugador.
+
+### 4. Conectar a otra persona
+
+1. Conecta el otro dispositivo al mismo Wi-Fi o a la misma red mediante Ethernet.
+2. En su navegador, abre la **dirección de red que muestra tu terminal**, por ejemplo `http://192.168.1.26:3000`. Esa IP es solo un ejemplo: utiliza la de tu PC.
+3. El otro dispositivo debe usar esa IP, no `localhost`, porque `localhost` se refiere al dispositivo donde se abre el navegador.
+4. También puedes copiar la dirección desde **Invitar amigos** o **Menú → Invitar** en móvil.
+5. El PC servidor debe permanecer encendido, conectado y sin suspenderse. Consulta [Red local y configuración](#red-local-y-configuración) si no pueden conectar.
+
+También puedes probar dos personajes en un único PC con navegadores diferentes o una ventana privada. Cada uno debe entrar con su propio acceso; el mismo personaje no puede abrirse dos veces.
+
+### 5. Detener, volver a arrancar y actualizar
+
+Para terminar la partida, vuelve a la terminal del servidor y pulsa **Ctrl+C**. Esto guarda el progreso y cierra el servidor. Cerrar solo la pestaña del navegador no detiene el servidor.
+
+Para jugar otro día, abre una terminal en la carpeta `astra` y ejecuta:
+
+```sh
+npm start
+```
+
+`npm start` utiliza la compilación existente. En una instalación nueva o después de cambiar código, utiliza `npm run play` para compilar antes de arrancar.
+
+Para descargar una actualización del repositorio, detén primero el servidor. Si tu copia no tiene modificaciones locales pendientes, ejecuta:
+
+```sh
+git pull
 npm ci
 npm run play
 ```
 
-`play` comprueba TypeScript, compila el cliente y el servidor y arranca el juego. La primera instalación requiere Internet; una vez instaladas las dependencias, la partida y sus recursos funcionan en la LAN sin servicios externos, fuentes remotas ni CDN.
+Si Git informa de cambios locales o conflictos, resuélvelos antes de continuar. Los guardados están en `data/`, fuera del código versionado; consulta [Guardados y personajes](#guardados-y-personajes) para hacer una copia.
 
-La terminal muestra las direcciones disponibles, por ejemplo:
+Una vez instaladas las dependencias, la partida y todos sus recursos funcionan en la LAN sin servicios externos, fuentes remotas ni CDN.
 
-```text
-En este PC: http://localhost:3000
-Red local:  http://192.168.1.26:3000
-```
+## Solución de problemas de arranque
 
-1. Abre la dirección local en tu PC y elige un nombre.
-2. Conecta el otro PC, teléfono o tableta al mismo Wi-Fi o red Ethernet.
-3. En el segundo equipo, abre la **dirección IP que muestra la terminal**, no `localhost`.
-4. También puedes copiarla desde **Invitar amigos** dentro del juego.
-5. Mantén abierta la terminal. **Ctrl+C** guarda y cierra el servidor.
+| Problema | Qué comprobar |
+| --- | --- |
+| `node`, `npm` o `git` no se reconoce | Instala la herramienta correspondiente y abre una terminal nueva. Repite la comprobación de versiones. |
+| PowerShell bloquea `npm.ps1` | Usa `npm.cmd ci` y `npm.cmd run play` en PowerShell, o ejecuta los comandos originales desde Símbolo del sistema. |
+| Error `ENOENT` relacionado con `package.json` | Entra con `cd` en la carpeta clonada, donde están `package.json` y `package-lock.json`. |
+| Error relacionado con `node:sqlite` o versión de Node | Comprueba `node --version`, activa Node.js 24 y vuelve a ejecutar `npm ci`. |
+| No se encuentra `dist/server/server/index.js` | Todavía falta compilar: ejecuta `npm run play`. |
+| `tsc` o `vite` no se encuentra | Ejecuta `npm ci`. Si instalaste omitiendo dependencias de desarrollo, usa `npm ci --include=dev`, porque la compilación las necesita. |
+| `EADDRINUSE` o puerto 3000 ocupado | Detén la instancia anterior desde su terminal o elige otro puerto con los ejemplos de la sección siguiente. |
+| La instalación falla al descargar paquetes | Comprueba la conexión a Internet y vuelve a ejecutar `npm ci`; conserva `package-lock.json`. |
+| El navegador no puede abrir el juego | Comprueba que la terminal siga ejecutando el servidor y utiliza la dirección y el puerto que muestra. |
+| Hay un error de WebGL o la imagen no aparece | Habilita la aceleración gráfica del navegador. Si puedes entrar pero va lento, selecciona calidad Baja en Ajustes. |
 
-Después de compilar, puedes iniciar de nuevo con `npm start`. Si cambias código, usa `npm run play` para recompilar.
+Para comprobar únicamente que el servidor responde, abre `http://localhost:3000/api/health` en el PC servidor: debe mostrar `{"ok":true}`. Si cambiaste de puerto, usa ese puerto también en esta dirección. Esta comprobación no verifica los gráficos ni la conexión desde otro dispositivo.
 
 ## Cómo jugar
 
@@ -117,17 +198,21 @@ Variables opcionales:
 Linux/macOS:
 
 ```sh
-PORT=4000 npm start
+PORT=4000 npm run play
 ```
 
 PowerShell:
 
 ```powershell
 $env:PORT = "4000"
-npm start
+npm run play
 ```
 
-## Desarrollo y pruebas
+En los ejemplos anteriores, abre `http://localhost:4000` y comparte la IP del PC con `:4000`. En PowerShell, `$env:PORT` permanece configurado en esa terminal; puedes eliminarlo con `Remove-Item Env:PORT` para volver al puerto predeterminado.
+
+Las variables se leen del entorno de la terminal; la aplicación no carga automáticamente un archivo `.env`.
+
+## Desarrollo y pruebas (opcional)
 
 ```sh
 npm run dev          # Servidor y Vite en el mismo puerto; recarga manual
@@ -136,6 +221,8 @@ npm test             # Controles, reglas, persistencia y clientes WebSocket real
 npm run build        # Compilación de producción
 npm run test:browser # Escritorio, móvil y gestos; servidores aislados
 ```
+
+Estos comandos son para trabajar en el código; no son necesarios para jugar. Para las pruebas de navegador, ejecuta primero `npm run build`.
 
 En desarrollo, reinicia `npm run dev` después de cambiar el servidor. La recarga automática de Vite está desactivada para compartir el puerto sin otra conexión HMR.
 
@@ -164,3 +251,17 @@ La interfaz incluye teclado/ratón y controles táctiles en vertical y horizonta
 Es una aventura LAN de un mapa. El alojamiento público masivo, cuentas con contraseña, TLS, comercio entre jugadores, mazmorras instanciadas y múltiples zonas son ampliaciones posteriores. La comunicación HTTP/WS actual está destinada a una red local de confianza.
 
 Tecnologías: [Babylon.js](https://www.babylonjs.com/), [Colyseus](https://docs.colyseus.io/), [Vite](https://vite.dev/), TypeScript y SQLite integrado en Node.js. Las versiones exactas están fijadas en `package-lock.json`.
+
+## Compartir el código y crear commits
+
+Consulta la [guía para publicar el repositorio](docs/publicar-repositorio.md) y las [instrucciones para contribuir](CONTRIBUTING.md). Los guardados y las claves de acceso de personajes no forman parte del código que se publica.
+
+Para activar los mensajes automáticos en un clon nuevo:
+
+```sh
+npm run git:setup
+git add .
+git commit -m "."
+```
+
+El mensaje `.` se convierte en `version 1.0 AAAA-MM-DD HH:mm:ss -0400`, usando la fecha y zona horaria de Git. Los siguientes commits generan `1.1`, `1.2`, etc. Los mensajes descriptivos se conservan. La instalación del hook es local y explícita en cada clon; no requiere modificar la configuración global de Git.

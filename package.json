@@ -13,7 +13,8 @@
     "play": "npm run build && npm start",
     "check": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "git:setup": "node scripts/install-git-hooks.mjs"
   },
   "dependencies": {
     "@babylonjs/core": "^9.25.0",
@@ -30,5 +31,6 @@
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "vite": "^8.2.2"
-  }
+  },
+  "description": "RPG 3D cooperativo para navegador, PC y móvil, con servidor temporal en red local."
 }
