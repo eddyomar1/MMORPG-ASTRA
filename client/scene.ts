@@ -1,3 +1,5 @@
+import { WorldGestures } from './touch-controls';
+import type { Quality } from './preferences';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { Scene } from '@babylonjs/core/scene';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
@@ -31,9 +33,12 @@ export class WorldView {
   private particles: { mesh: Mesh; phase: number }[] = [];
   private labelQueue = new Map<Actor, { y: number; show: boolean }>();
   private selection: Mesh; private fountain!: Mesh; private npc: Actor;
-  private pointerStart = { x: 0, y: 0 }; private dragging = false;
+  gestures: WorldGestures; canInteract = () => false; tapToMove = false; sensitivity = 1; reducedMotion = false;
+  private glow: GlowLayer; private quality: Quality = 'auto'; private qualityLevel: 'low' | 'medium' | 'high' = 'medium';
+  private lastFrame = 0; private measuredFPS = 0; private frames = 0; private measuredAt = 0;
+  private cost = 0; private qualityAt = 0; private fastWindows = 0;
   constructor(public canvas: HTMLCanvasElement) {
-    this.engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true, powerPreference: 'high-performance' }, true);
+    this.engine = new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true, powerPreference: 'high-performance' }, true);
     this.engine.renderEvenInBackground = false;
     this.engine.setHardwareScalingLevel(Math.max(1, window.devicePixelRatio / 1.5));
     this.scene = new Scene(this.engine);
@@ -44,41 +49,59 @@ export class WorldView {
     this.camera.lowerRadiusLimit = 11; this.camera.upperRadiusLimit = 45;
     this.camera.lowerBetaLimit = 0.3; this.camera.upperBetaLimit = 1.25;
     this.camera.minZ = 0.2; this.camera.maxZ = 180;
-    this.camera.attachControl(canvas, true); this.camera.inputs.removeByType('ArcRotateCameraKeyboardMoveInput');
-    const pointers = this.camera.inputs.attached.pointers as { buttons?: number[]; angularSensibilityX?: number; angularSensibilityY?: number; panningSensibility?: number };
-    if (pointers) { pointers.buttons = [2]; pointers.angularSensibilityX = 450; pointers.angularSensibilityY = 450; pointers.panningSensibility = 0; }
-    this.camera.wheelPrecision = 28; this.camera.panningSensibility = 0;
     const hemi = new HemisphericLight('sky', new Vector3(0, 1, 0), this.scene); hemi.intensity = 0.7; hemi.groundColor = Color3.FromHexString('#59655c');
     const sun = new DirectionalLight('sun', new Vector3(-0.6, -1, -0.5), this.scene); sun.position = new Vector3(30, 45, 20); sun.intensity = 0.9; sun.diffuse = Color3.FromHexString('#ffe8c7');
     sun.shadowMinZ = 1; sun.shadowMaxZ = 130;
     this.shadows = new ShadowGenerator(1024, sun); this.shadows.usePercentageCloserFiltering = true; this.shadows.bias = 0.008; this.shadows.normalBias = 0.1; this.shadows.setDarkness(0.25);
-    const glow = new GlowLayer('glow', this.scene, { mainTextureFixedSize: 512 }); glow.intensity = 0.5;
+    const glow = this.glow = new GlowLayer('glow', this.scene, { mainTextureFixedSize: 512 }); glow.intensity = 0.5;
     this.labelLayer = document.createElement('div'); this.labelLayer.id = 'labels'; document.body.append(this.labelLayer);
     this.buildWorld(); this.mergeScenery();
     this.npc = this.createPerson('npc', '#d6bd82'); this.npc.root.position.set(NPC.x, 0, NPC.z); this.npc.root.rotation.y = 0.4;
     this.npc.label.innerHTML = `<span class="quest-mark">!</span><strong>Elara</strong><small>Guardiana del valle</small>`;
     this.selection = MeshBuilder.CreateTorus('selection', { diameter: 2.6, thickness: 0.055, tessellation: 48 }, this.scene);
     this.selection.material = this.mat('#e4bd71', true); this.selection.isPickable = false; this.selection.setEnabled(false);
-    canvas.addEventListener('contextmenu', e => e.preventDefault());
-    canvas.addEventListener('pointerdown', e => { this.pointerStart = { x: e.clientX, y: e.clientY }; this.dragging = true; });
-    canvas.addEventListener('pointerup', e => {
-      this.dragging = false;
-      if (!this.playing || e.button !== 0 || Math.hypot(e.clientX - this.pointerStart.x, e.clientY - this.pointerStart.y) > 6) return;
-      const hit = this.scene.pick(this.scene.pointerX, this.scene.pointerY, mesh => mesh.isPickable && (mesh.name === 'terrain' || !!mesh.metadata?.enemy));
-      if (hit?.pickedMesh?.metadata?.enemy) this.onSelect(hit.pickedMesh.metadata.enemy);
-      else if (hit?.pickedPoint) { this.onSelect(''); this.onGround(hit.pickedPoint.x, hit.pickedPoint.z); this.effect('move', hit.pickedPoint.x, hit.pickedPoint.z); }
+    this.gestures = new WorldGestures(canvas, {
+      enabled: () => this.canInteract(),
+      rotate: (x, y) => { this.camera.alpha -= x * .004 * this.sensitivity; this.camera.beta = Math.max(.3, Math.min(1.25, this.camera.beta - y * .004 * this.sensitivity)); },
+      zoom: factor => this.zoom(factor),
+      tap: (x, y, touch) => {
+        const hit = this.scene.pick(x, y, mesh => mesh.isPickable && (mesh.name === 'terrain' || !!mesh.metadata?.enemy));
+        if (hit?.pickedMesh?.metadata?.enemy) this.onSelect(hit.pickedMesh.metadata.enemy);
+        else if (hit?.pickedPoint && (!touch || this.tapToMove)) { this.onSelect(''); this.onGround(hit.pickedPoint.x, hit.pickedPoint.z); this.effect('move', hit.pickedPoint.x, hit.pickedPoint.z); }
+      },
     });
     window.addEventListener('resize', () => this.engine.resize());
     // Labels use the camera matrix of the frame that has just been rendered.
     this.scene.onAfterRenderObservable.add(() => {
-      this.labelQueue.forEach(({ y, show }, actor) => {
+      const occupied: { x: number; y: number }[] = [];
+      const selected = this.actors.get(this.selected), self = this.actors.get(this.selfId);
+      const priority = (actor: Actor) => actor === selected ? 0 : actor === this.npc ? 1 : actor === self ? 2 : 3;
+      [...this.labelQueue].sort(([a], [b]) => priority(a) - priority(b)).forEach(([actor, { y, show }]) => {
         const p = actor.root.position, screen = this.project(p.x, p.y + y, p.z);
-        actor.label.style.display = show && screen.visible ? '' : 'none';
+        const visible = show && screen.visible && screen.x >= 0 && screen.x <= this.canvas.clientWidth && screen.y > 0 && screen.y <= this.canvas.clientHeight;
+        const overlap = occupied.some(other => Math.abs(other.x - screen.x) < 100 && Math.abs(other.y - screen.y) < 42);
+        actor.label.style.display = visible && !overlap ? '' : 'none';
+        if (visible && !overlap) occupied.push(screen);
         actor.label.style.transform = `translate(${screen.x}px, ${screen.y}px) translate(-50%, -100%)`;
       });
       this.labelQueue.clear();
     });
-    this.engine.runRenderLoop(() => { if (this.suspended) return; this.update(Math.min(0.05, this.engine.getDeltaTime() / 1000)); this.scene.render(); });
+    this.engine.runRenderLoop(() => {
+      const now = performance.now(), capped = this.quality === 'battery' || this.qualityLevel === 'low';
+      if (this.suspended || document.hidden || capped && now - this.lastFrame < 32) return;
+      const dt = Math.min(.05, (now - (this.lastFrame || now - 16)) / 1000); this.lastFrame = now;
+      this.update(dt); this.scene.render(); this.frames++;
+      this.cost = this.cost * .95 + (performance.now() - now) * .05;
+      if (now - this.measuredAt > 2000) { this.measuredFPS = Math.round(this.frames * 1000 / (now - this.measuredAt)); this.frames = 0; this.measuredAt = now; }
+      if (this.quality === 'auto' && now - this.qualityAt > 10000) {
+        this.qualityAt = now;
+        const levels = ['low', 'medium', 'high'] as const, index = levels.indexOf(this.qualityLevel);
+        if (this.cost > 25 && index > 0) { this.applyQuality(levels[index - 1]); this.fastWindows = 0; }
+        else if (this.cost < 10 && index < 2 && ++this.fastWindows >= 3) { this.applyQuality(levels[index + 1]); this.fastWindows = 0; }
+        else if (this.cost >= 10) this.fastWindows = 0;
+      }
+    });
+    this.setQuality('auto');
   }
   private mergeScenery() {
     const animated = new Set<Mesh>([this.fountain, ...this.particles.map(p => p.mesh)]);
@@ -282,11 +305,11 @@ export class WorldView {
   private update(dt: number) {
     this.time += dt;
     if (this.playing && (!this.state?.players || !this.state.enemies || !this.state.loot)) return;
-    const me = this.state?.players.get(this.selfId), t = this.time;
+    const me = this.state?.players.get(this.selfId), t = this.reducedMotion ? 0 : this.time;
     this.fountain.rotation.y = t * 0.4; this.fountain.position.y = 2.6 + Math.sin(t * 1.5) * 0.15;
     this.particles.forEach(p => { p.mesh.position.y += Math.sin(t + p.phase) * dt * 0.12; });
     this.effects = this.effects.filter(e => { e.age += dt; const s = e.kind === 'nova' ? 1 + e.age * 15 : e.kind === 'slam' ? 1 + e.age * 12 : 1 + e.age * 3; e.mesh.scaling.setAll(s); e.mesh.visibility = Math.max(0, 1 - e.age * 1.5); if (e.age > 0.7) { e.mesh.dispose(); return false; } return true; });
-    if (!this.playing) { if (!this.dragging) this.camera.alpha += dt * 0.012; this.positionLabel(this.npc, 2.8, false); return; }
+    if (!this.playing) { if (!this.reducedMotion) this.camera.alpha += dt * 0.012; this.positionLabel(this.npc, 2.8, false); return; }
     const live = new Set<string>();
     this.state?.players.forEach((p, id) => {
       live.add(id); let a = this.actors.get(id);
@@ -312,7 +335,7 @@ export class WorldView {
         a.limbs[3].rotation.x = swing;
       }
       const bar = a.label.querySelector('b'); if (bar) (bar as HTMLElement).style.width = `${Math.max(0, Math.min(100, (p.hp / (p.maxHp || 100)) * 100))}%`;
-      this.positionLabel(a, 2.8, p.connected);
+      this.positionLabel(a, 2.8, p.connected && (!!me && Math.hypot(me.x - p.x, me.z - p.z) < 20));
       if (id === this.selfId) { this.target.copyFrom(pos); this.target.y = 1; }
     });
     this.state?.enemies.forEach((e, id) => {
@@ -336,8 +359,22 @@ export class WorldView {
     this.selection.setEnabled(!!selected && selected.hp > 0);
     if (selected) { this.selection.position.set(selected.x, 0.14, selected.z); this.selection.scaling.setAll(selected.kind === 'warden' ? 1.9 : 1); }
     this.positionLabel(this.npc, 2.8, !!me && Math.hypot(me.x - NPC.x, me.z - NPC.z) < 24);
-    this.camera.setTarget(Vector3.Lerp(this.camera.target, this.target, Math.min(1, dt * 7)), false, true, true);
+    this.camera.setTarget(Vector3.Lerp(this.camera.target, this.target, this.reducedMotion ? 1 : Math.min(1, dt * 7)), false, true, true);
   }
-  setQuality(low: boolean) { this.shadows.getShadowMap()!.refreshRate = low ? 0 : 1; this.scene.shadowsEnabled = !low; this.engine.setHardwareScalingLevel(low ? 1.8 : Math.max(1, window.devicePixelRatio / 1.5)); }
-  get fps() { return Math.round(this.engine.getFps()); }
+  zoom(factor: number) { this.camera.radius = Math.max(11, Math.min(this.playing ? 36 : 45, this.camera.radius * factor)); }
+  centerCamera() { this.camera.alpha = Math.PI / 2; this.camera.beta = .87; this.camera.radius = 23; }
+  setQuality(quality: Quality | boolean) {
+    this.quality = typeof quality === 'boolean' ? quality ? 'low' : 'high' : quality;
+    this.fastWindows = 0; this.qualityAt = performance.now();
+    this.applyQuality(this.quality === 'auto' ? 'medium' : this.quality === 'battery' ? 'low' : this.quality);
+  }
+  private applyQuality(level: 'low' | 'medium' | 'high') {
+    this.qualityLevel = level;
+    this.scene.shadowsEnabled = level === 'high'; this.glow.isEnabled = level !== 'low';
+    this.particles.forEach((p, i) => p.mesh.setEnabled(level === 'high' || level === 'medium' && i % 2 === 0));
+    // Engine adapts to device ratio; scale is expressed against CSS resolution.
+    const ratio = window.devicePixelRatio || 1;
+    this.engine.setHardwareScalingLevel(1 / (level === 'low' ? .75 : level === 'medium' ? 1 : Math.min(ratio, 1.5)));
+  }
+  get fps() { return this.measuredFPS; }
 }

@@ -211,7 +211,7 @@ export class GameWorld {
       this.changed(id); return;
     }
     const loot = [...this.state.loot.entries()].filter(([, l]) => distance(p, l) <= 3).sort((a, b) => distance(p, a[1]) - distance(p, b[1]))[0];
-    if (!loot) return this.notice(id, 'Acércate a Elara o a un botín y pulsa E.');
+    if (!loot) return this.notice(id, 'Acércate a Elara o a un botín y usa Interactuar.');
     if (!this.addItem(profile, loot[1].kind as ItemKind)) return this.notice(id, 'No hay espacio para este objeto.');
     this.state.loot.delete(loot[0]); this.changed(id); this.notice(id, `Recogido: ${ITEMS[loot[1].kind as ItemKind].name}`);
   }

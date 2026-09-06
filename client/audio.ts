@@ -11,6 +11,7 @@ export class GameAudio {
     } else { this.ambient?.stop(); this.ambient?.disconnect(); this.ambientGain?.disconnect(); }
     return this.enabled;
   }
+  resume() { if (this.enabled && this.context?.state === 'suspended') void this.context.resume(); }
   play(kind: string) {
     if (!this.enabled || !this.context) return;
     const oscillator = this.context.createOscillator(), gain = this.context.createGain(), now = this.context.currentTime;

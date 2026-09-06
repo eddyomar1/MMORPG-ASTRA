@@ -4,7 +4,7 @@ RPG 3D cooperativo para navegador, con un mundo compartido para **1–8 jugadore
 
 ## Inicio rápido
 
-Necesitas **Node.js 24 o posterior**, npm y un navegador de escritorio con WebGL y aceleración gráfica. Los demás jugadores solo necesitan su navegador.
+Necesitas **Node.js 24 o posterior**, npm y un navegador con WebGL y aceleración gráfica; el servidor se ejecuta en el PC. Los demás jugadores solo necesitan su navegador.
 
 ```sh
 npm ci
@@ -21,7 +21,7 @@ Red local:  http://192.168.1.26:3000
 ```
 
 1. Abre la dirección local en tu PC y elige un nombre.
-2. Conecta el segundo equipo al mismo Wi-Fi o red Ethernet.
+2. Conecta el otro PC, teléfono o tableta al mismo Wi-Fi o red Ethernet.
 3. En el segundo equipo, abre la **dirección IP que muestra la terminal**, no `localhost`.
 4. También puedes copiarla desde **Invitar amigos** dentro del juego.
 5. Mantén abierta la terminal. **Ctrl+C** guarda y cierra el servidor.
@@ -45,13 +45,31 @@ Después de compilar, puedes iniciar de nuevo con `npm start`. Si cambias códig
 | E | Hablar con Elara, entregar misión o recoger botín cercano |
 | I / J / M | Inventario / diario / mapa |
 | Enter | Escribir y enviar chat |
-| Escape | Cerrar ventana o quitar selección |
+| C | Centrar cámara |
+| Escape | Cerrar ventana, salir del chat o quitar selección |
 
 Al entrar, camina hasta **Elara**, junto al cristal del santuario, y pulsa **E** para aceptar la primera misión. Sigue el camino al norte para encontrar criaturas. Recoge sus objetos con **E**. Regresa a Elara para entregar cada misión y pulsa **E** otra vez para aceptar la siguiente.
 
 La aldea restaura la vida. Si mueres, reapareces en el santuario a los cinco segundos sin perder objetos. Los compañeros vivos que hayan participado recientemente y estén cerca de una baja reciben experiencia, oro y progreso de misión. El botín del suelo es compartido: lo recoge una sola persona. Cada participante del jefe recibe su propia espada astral.
 
-El inventario permite equipar las espadas encontradas. Estando junto a Elara, puedes comprar pociones desde el inventario por 3 cristales o, si no tienes suficientes, 15 de oro. El sonido se activa con el botón del altavoz. En Ajustes puedes reducir sombras y resolución.
+El inventario permite equipar las espadas encontradas. Estando junto a Elara, puedes comprar pociones desde el inventario por 3 cristales o, si no tienes suficientes, 15 de oro. El sonido se activa con el botón del altavoz. En Ajustes puedes cambiar calidad, tamaño de interfaz y controles, sensibilidad, distribución para zurdos y atajos. Las preferencias se conservan en el navegador. Tab cambia de objetivo cuando el mundo tiene el foco; dentro de menús conserva la navegación normal.
+
+### Móvil y tableta
+
+Abre la dirección LAN del PC en el navegador del teléfono. Puedes jugar en horizontal o vertical; el modo táctil se detecta automáticamente y se puede fijar desde **Menú → Ajustes**.
+
+- **Joystick izquierdo:** movimiento gradual según la cámara. **Correr** alterna la carrera.
+- **Ataque:** mantén el botón para repetir ataques. Puedes mover el joystick y atacar simultáneamente.
+- **Onda astral, Luz vital y Poción:** botones junto al ataque; muestran el tiempo de recarga.
+- **Cámara:** arrastra una zona libre del mundo. Pellizca para acercar o alejar; los botones **+ / ◎ / −** permiten zoom y centrado sin gestos.
+- **Objetivo:** toca un enemigo o usa **Cambiar objetivo**. El desplazamiento al tocar terreno se activa opcionalmente en Ajustes.
+- **Hablar / recoger:** usa el botón contextual al acercarte a Elara o a un botín.
+- **Menú:** inventario, misiones, mapa, ajustes, invitación y sonido. **Grupo** abre la lista de compañeros.
+- **Conversar:** abre el chat. El borrador se conserva si cierras el panel o pierdes la conexión.
+
+Los controles se detienen al abrir un panel, escribir, girar la pantalla, ocultar la página, morir o perder la conexión. **Los menús no pausan el mundo multijugador**: la imagen y la vida siguen actualizándose; puedes recibir daño mientras revisas el inventario.
+
+La calidad **Automática** ajusta el detalle tras medir el coste de renderizado. Baja y Ahorro limitan la imagen a un máximo aproximado de 30 FPS, reducen resolución y desactivan sombras/resplandor. Media y Alta permiten hasta la frecuencia del navegador. Ningún perfil garantiza ese rendimiento en cualquier dispositivo; el objetivo móvil debe comprobarse en teléfonos físicos. El tamaño del joystick se adapta al espacio disponible para evitar solapamientos al ampliar los botones.
 
 ## Contenido
 
@@ -114,16 +132,16 @@ npm start
 ```sh
 npm run dev          # Servidor y Vite en el mismo puerto; recarga manual
 npm run check        # Comprobación de tipos
-npm test             # Reglas, persistencia y clientes WebSocket reales
+npm test             # Controles, reglas, persistencia y clientes WebSocket reales
 npm run build        # Compilación de producción
-npm run test:browser # Prueba de dos contextos Chromium, servidor aislado en 3100
+npm run test:browser # Escritorio, móvil y gestos; servidores aislados
 ```
 
 En desarrollo, reinicia `npm run dev` después de cambiar el servidor. La recarga automática de Vite está desactivada para compartir el puerto sin otra conexión HMR.
 
 Las pruebas de navegador usan Chromium en `/usr/bin/chromium`; configura `CHROMIUM_PATH` con la ruta de tu instalación si es distinta. No usan la base de datos de tus partidas. Las capturas y trazas se guardan en `test-results/`.
 
-Las pruebas cubren velocidad y colisiones, alcance y recargas, recogida simultánea de botín, economía, recompensas cooperativas, reaparición, la campaña completa, guardado tras reabrir SQLite, sincronización, chat, ocho conexiones y reconexión. Las pruebas de navegador comprueban la entrada de dos jugadores, chat, misión, inventario, mapa y recuperación del personaje.
+Las pruebas cubren velocidad y colisiones, alcance y recargas, recogida simultánea de botín, economía, recompensas cooperativas, reaparición, la campaña completa, guardado tras reabrir SQLite, sincronización, chat, ocho conexiones y reconexión. Las pruebas de navegador comprueban la entrada de dos jugadores, chat, misión, inventario, mapa y recuperación del personaje, además de movimiento y combate multitáctiles enviados por Chromium, cancelación, paneles con vida actualizada, distintos tamaños de pantalla y preferencias. Las pruebas táctiles usan CDP en Chromium; no sustituyen una comprobación en Safari/iOS ni del teclado virtual, temperatura o batería de un dispositivo físico.
 
 ## Organización
 
@@ -141,7 +159,7 @@ El servidor simula a 20 Hz y envía cambios de estado a 20 Hz. Valida movimiento
 
 ## Alcance de esta entrega
 
-La experiencia está diseñada para escritorio con teclado y ratón; no incorpora controles táctiles completos. La navegación por clic avanza en línea recta con colisiones, sin búsqueda automática de rutas. El rendimiento depende de la GPU, el navegador y el PC anfitrión; ocho conexiones verifican la capacidad configurada, no equivalen a una prueba en ocho dispositivos físicos.
+La interfaz incluye teclado/ratón y controles táctiles en vertical y horizontal. La compatibilidad física y el rendimiento sostenido en Android/iOS quedan pendientes de comprobación con teléfonos reales; no se ha medido todavía la meta de 30 FPS durante 15 minutos. La navegación por clic avanza en línea recta con colisiones, sin búsqueda automática de rutas. El rendimiento depende de la GPU, el navegador y el PC anfitrión; ocho conexiones verifican la capacidad configurada, no equivalen a una prueba en ocho dispositivos físicos.
 
 Es una aventura LAN de un mapa. El alojamiento público masivo, cuentas con contraseña, TLS, comercio entre jugadores, mazmorras instanciadas y múltiples zonas son ampliaciones posteriores. La comunicación HTTP/WS actual está destinada a una red local de confianza.
 
