@@ -19,14 +19,17 @@ import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder'
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
 const MeshBuilder = { CreateBox, CreateCylinder, CreateSphere, CreateTorus };
-import { CHARACTER_CLASSES, COLORS, ENEMIES, NPC, OBSTACLES, WORLD, randomSeed, type CharacterClass, type EnemyKind } from '../shared/content';
-type Actor = { root: TransformNode; limbs: TransformNode[]; sword?: TransformNode; label: HTMLDivElement; ring?: Mesh; appearance?: string; lastX: number; lastZ: number; };
+import { CHARACTER_CLASSES, COLORS, ENEMIES, ITEMS, NPC, OBSTACLES, WORLD, randomSeed, type CharacterClass, type EnemyKind, type ItemKind } from '../shared/content';
+type Actor = { root: TransformNode; limbs: TransformNode[]; sword?: TransformNode; costume?: TransformNode; label: HTMLDivElement; ring?: Mesh; appearance?: string; lastX: number; lastZ: number; };
 import type { WorldState } from '../shared/schema';
 export class WorldView {
   engine: Engine; scene: Scene; camera: ArcRotateCamera;
   state?: WorldState; selfId = ''; selected = ''; playing = false; suspended = false;
   onSelect: (id: string) => void = () => {}; onGround: (x: number, z: number) => void = () => {};
   private actors = new Map<string, Actor>(); private drops = new Map<string, TransformNode>();
+  private preview?: Actor;
+  private missiles = new Map<string, Mesh>();
+  private missilePool: Mesh[] = [];
   private materials = new Map<string, StandardMaterial>(); private shadows: ShadowGenerator;
   private target = new Vector3(0, 1, 5); private time = 0; private labelLayer: HTMLDivElement;
   private effects: { mesh: Mesh; age: number; kind: string }[] = [];
@@ -102,6 +105,7 @@ export class WorldView {
       }
     });
     this.setQuality('auto');
+    new ResizeObserver(() => this.engine.resize()).observe(canvas);
   }
   private mergeScenery() {
     const animated = new Set<Mesh>([this.fountain, ...this.particles.map(p => p.mesh)]);
@@ -279,19 +283,43 @@ export class WorldView {
     this.labelQueue.set(actor, { y, show });
   }
   private classPalette(classType: string) {
-    const palette: Record<string, { primary: string; accent: string; trim: string }> = {
-      traveler: { primary: '#64b8ab', accent: '#d4efe8', trim: '#8ed7c5' },
-      guardian: { primary: '#cf8d60', accent: '#f2d3ad', trim: '#dca066' },
-      mage: { primary: '#9595d4', accent: '#dfe1ff', trim: '#babdf1' },
-    };
-    return palette[classType] ?? palette.traveler;
+    const def = CHARACTER_CLASSES[classType as CharacterClass] ?? CHARACTER_CLASSES.knight;
+    return { primary: def.color, accent: def.accent, trim: def.accent };
   }
-  private recolorActor(actor: Actor, classType: string, banner: string) {
+  private recolorActor(actor: Actor, classType: string, banner: string, weapon = 'starter', armor = '', accessory = '') {
     const { primary, accent, trim } = this.classPalette(classType);
     if (actor.ring) actor.ring.scaling.setAll(1.05 + Math.sin(this.time * 2.2) * 0.04);
-    const appearance = `${classType}:${banner}`;
+    const appearance = `${classType}:${banner}:${weapon}:${armor}:${accessory}`;
     if (actor.appearance === appearance) return;
     actor.appearance = appearance;
+    actor.costume?.getChildMeshes().forEach(mesh => this.shadows.removeShadowCaster(mesh)); actor.costume?.dispose();
+    const costume = actor.costume = new TransformNode('class-equipment', this.scene); costume.parent = actor.root;
+    actor.sword?.getChildMeshes().forEach(mesh => { this.shadows.removeShadowCaster(mesh); mesh.dispose(); });
+    const weaponColor = weapon !== 'starter' && ITEMS[weapon as ItemKind] ? ITEMS[weapon as ItemKind].color : '#c8d6c5';
+    if (classType === 'mage') {
+      this.cylinder('robe-skirt', 1.05, .65, .85, 8, primary, 0, .63, 0, costume);
+      this.cylinder('hat-brim', 1, 1, .08, 8, primary, 0, 2.13, 0, costume);
+      this.cylinder('hat', .7, .05, .8, 6, primary, 0, 2.5, 0, costume);
+      this.cylinder('staff', .09, .09, 1.9, 6, '#826249', 0, .4, .25, actor.sword);
+      const gem = this.sphere('staff-crystal', .35, weaponColor, 0, 1.4, .25, actor.sword); gem.material = this.mat(weaponColor, true);
+    } else if (classType === 'archer') {
+      this.sphere('hood', .74, primary, 0, 1.98, -.15, costume);
+      this.cylinder('quiver', .33, .33, .9, 6, '#73533e', .25, 1.3, -.48, costume);
+      for (let i = 0; i < 3; i++) this.cylinder('quiver-arrow', .035, .035, .7, 4, '#ecdcb4', .15 + i * .08, 1.85, -.48, costume);
+      for (const side of [-1, 1]) { const bow = this.box('bow', .09, .78, .09, weaponColor, 0, side * .32, .45, actor.sword); bow.rotation.x = side * -.5; }
+      this.box('bow-string', .015, 1.35, .015, '#f2e9c9', 0, 0, .25, actor.sword);
+      this.box('nocked-arrow', .04, .04, 1.15, '#e6d1a5', 0, 0, .62, actor.sword);
+    } else {
+      this.box('blade', .13, .08, 1.2, weaponColor, 0, 0, .65, actor.sword);
+      this.box('guard', .42, .1, .12, accent, 0, 0, .14, actor.sword);
+      this.sphere('helmet', .68, '#a8b8b2', 0, 2.05, -.08, costume);
+      this.box('helmet-crest', .1, .3, .5, primary, 0, 2.4, -.07, costume);
+      this.box('breastplate', .81, .7, .53, '#a8b8b2', 0, 1.22, .03, costume);
+      const shield = this.cylinder('shield', .8, .8, .13, 6, primary, -.65, 1.1, .33, costume); shield.rotation.x = Math.PI / 2;
+      this.box('shield-mark', .1, .4, .03, accent, -.65, 1.1, .42, costume);
+    }
+    if (armor) this.box('armor-trim', .85, .2, .58, ITEMS[armor as ItemKind]?.color ?? accent, 0, 1.42, .04, costume);
+    if (accessory) { const jewel = this.sphere('amulet', .17, ITEMS[accessory as ItemKind]?.color ?? accent, 0, 1.48, .34, costume); jewel.material = this.mat(accent, true); }
     if (actor.ring) actor.ring.material = this.mat(COLORS.includes(banner) ? banner : primary, true);
     actor.root.getChildMeshes().forEach(mesh => {
       if (!(mesh.material instanceof StandardMaterial)) return;
@@ -302,6 +330,14 @@ export class WorldView {
       if (['guard', 'buckle'].includes(name)) mesh.material = this.mat(trim);
     });
   }
+  previewClass(classType: CharacterClass, banner: string) {
+    if (this.playing) return;
+    if (!this.preview) { this.preview = this.createPerson('class-preview', banner); this.preview.label.remove(); }
+    this.preview.root.setEnabled(true); this.preview.root.position.set(0, 0, 14); this.preview.root.rotation.y = .35;
+    this.recolorActor(this.preview, classType, banner);
+    this.camera.lowerRadiusLimit = 3; this.camera.radius = 5.4; this.camera.alpha = Math.PI / 2; this.camera.beta = 1.18;
+    this.camera.setTarget(new Vector3(0, 1.25, 14)); this.engine.resize();
+  }
   private update(dt: number) {
     this.time += dt;
     if (this.playing && (!this.state?.players || !this.state.enemies || !this.state.loot)) return;
@@ -309,12 +345,13 @@ export class WorldView {
     this.fountain.rotation.y = t * 0.4; this.fountain.position.y = 2.6 + Math.sin(t * 1.5) * 0.15;
     this.particles.forEach(p => { p.mesh.position.y += Math.sin(t + p.phase) * dt * 0.12; });
     this.effects = this.effects.filter(e => { e.age += dt; const s = e.kind === 'nova' ? 1 + e.age * 15 : e.kind === 'slam' ? 1 + e.age * 12 : 1 + e.age * 3; e.mesh.scaling.setAll(s); e.mesh.visibility = Math.max(0, 1 - e.age * 1.5); if (e.age > 0.7) { e.mesh.dispose(); return false; } return true; });
-    if (!this.playing) { if (!this.reducedMotion) this.camera.alpha += dt * 0.012; this.positionLabel(this.npc, 2.8, false); return; }
+    if (!this.playing) { if (this.preview && !this.reducedMotion) this.preview.root.rotation.y += dt * .22; this.positionLabel(this.npc, 2.8, false); return; }
+    if (this.preview) { this.preview.root.getChildMeshes().forEach(mesh => this.shadows.removeShadowCaster(mesh)); this.preview.root.dispose(); this.preview = undefined; }
     const live = new Set<string>();
     this.state?.players.forEach((p, id) => {
       live.add(id); let a = this.actors.get(id);
       if (!a) { a = this.createPerson(id, p.color || COLORS[0]); a.root.position.set(p.x, 0, p.z); this.actors.set(id, a); }
-      const classInfo = CHARACTER_CLASSES[(p.classType || 'traveler') as CharacterClass] ?? CHARACTER_CLASSES.traveler;
+      const classInfo = CHARACTER_CLASSES[(p.classType || 'knight') as CharacterClass] ?? CHARACTER_CLASSES.knight;
       const nameLabel = a.label.querySelector('strong')!, classLabel = a.label.querySelector('small')!;
       if (nameLabel.textContent !== p.name) nameLabel.textContent = p.name;
       if (classLabel.textContent !== classInfo.name) classLabel.textContent = classInfo.name;
@@ -322,7 +359,8 @@ export class WorldView {
       pos.x += (p.x - pos.x) * (snap ? 1 : Math.min(1, dt * 18)); pos.z += (p.z - pos.z) * (snap ? 1 : Math.min(1, dt * 18));
       const angle = Math.atan2(Math.sin(p.yaw - a.root.rotation.y), Math.cos(p.yaw - a.root.rotation.y)); a.root.rotation.y += angle * Math.min(1, dt * 14);
       a.root.rotation.z = p.hp <= 0 ? Math.PI / 2 : 0; pos.y = p.moving ? Math.abs(Math.sin(t * 11)) * 0.05 : 0;
-      this.recolorActor(a, p.classType || 'traveler', p.color);
+      this.recolorActor(a, p.classType || 'knight', p.color, p.weapon, p.armor, p.accessory);
+      if (a.ring) { a.ring.scaling.setAll(p.guardUntil > (this.state?.time ?? 0) || p.barrierUntil > (this.state?.time ?? 0) && p.barrier > 0 ? 1.5 : 1); a.ring.visibility = p.barrier > 0 || p.guardUntil > (this.state?.time ?? 0) ? 1 : .5; }
       const stride = p.moving ? Math.sin(t * 11) * 0.9 : 0;
       a.limbs.forEach((limb, i) => {
         const isLeg = i % 2 === 0;
@@ -330,7 +368,7 @@ export class WorldView {
         limb.rotation.x = swing;
       });
       if (p.attackUntil > (this.state?.time ?? 0)) {
-        const swing = -1.8 + Math.sin(t * 30) * 1.1;
+        const swing = p.classType === 'knight' ? -1.8 + Math.sin(t * 30) * 1.1 : p.classType === 'mage' ? -1.1 : -Math.PI / 2;
         a.limbs[1].rotation.x = swing;
         a.limbs[3].rotation.x = swing;
       }
@@ -351,10 +389,20 @@ export class WorldView {
     this.actors.forEach((a, id) => { if (!live.has(id)) { a.root.dispose(); a.label.remove(); this.actors.delete(id); } });
     this.state?.loot.forEach((l, id) => {
       let mesh = this.drops.get(id);
-      if (!mesh) { mesh = this.cylinder('loot', 0.55, 0, 0.9, 4, '#f5da91', l.x, 0.7, l.z); (mesh as Mesh).material = this.mat('#f5da91', true); this.drops.set(id, mesh); }
+      if (!mesh) { const color = ITEMS[l.kind as ItemKind]?.color ?? '#f5da91'; mesh = this.cylinder('loot', 0.55, 0, 0.9, 4, color, l.x, 0.7, l.z); (mesh as Mesh).material = this.mat(color, true); this.drops.set(id, mesh); }
       mesh.rotation.y = t; mesh.position.y = 0.65 + Math.sin(t * 3) * 0.12;
     });
     this.drops.forEach((mesh, id) => { if (!this.state?.loot.has(id)) { mesh.dispose(); this.drops.delete(id); } });
+    this.missiles.forEach((mesh, id) => { if (!this.state?.projectiles?.has(id)) { mesh.setEnabled(false); this.missiles.delete(id); this.missilePool.push(mesh); } });
+    this.state?.projectiles?.forEach((shot, id) => {
+      let mesh = this.missiles.get(id);
+      if (!mesh) {
+        if (this.missiles.size >= 32) return;
+        mesh = this.missilePool.pop() ?? this.sphere('projectile', .2, '#dcc795', 0, 1.2, 0);
+        mesh.setEnabled(true); mesh.material = this.mat(shot.kind === 'arcane' ? '#c1a5ff' : '#f3d894', true); mesh.scaling.set(1, 1, shot.kind === 'arrow' ? 4 : 1); this.missiles.set(id, mesh);
+      }
+      mesh.position.set(shot.x, 1.2, shot.z); mesh.rotation.y = Math.atan2(shot.x - shot.startX, shot.z - shot.startZ);
+    });
     const selected = this.state?.enemies.get(this.selected);
     this.selection.setEnabled(!!selected && selected.hp > 0);
     if (selected) { this.selection.position.set(selected.x, 0.14, selected.z); this.selection.scaling.setAll(selected.kind === 'warden' ? 1.9 : 1); }

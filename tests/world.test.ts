@@ -6,13 +6,13 @@ import { join } from 'node:path';
 import { CharacterStore } from '../server/database.js';
 import { GameWorld } from '../server/world.js';
 import { LootState } from '../shared/schema.js';
-import { COLORS, ENEMIES, NPC, WORLD, canStand, type EnemyKind } from '../shared/content.js';
+import { CLASS_WEAPONS, COLORS, ENEMIES, NPC, WORLD, canStand, type CharacterClass, type EnemyKind } from '../shared/content.js';
 
 const token = 'a'.repeat(64);
-function setup(t: TestContext) {
+function setup(t: TestContext, classType: CharacterClass = 'knight') {
   const db = new CharacterStore(':memory:'); t.after(() => db.close());
   const events: { type: string; data: unknown; to?: string }[] = [];
-  const world = new GameWorld(db, event => events.push(event)); world.add('alice', token, 'Alice', COLORS[0]);
+  const world = new GameWorld(db, event => events.push(event)); world.add('alice', token, 'Alice', COLORS[0], classType);
   return { world, db, events, player: world.state.players.get('alice')!, profile: world.profiles.get('alice')! };
 }
 function advance(world: GameWorld, seconds: number) { for (let i = 0; i < Math.ceil(seconds / 0.05); i++) world.step(0.05); }
@@ -78,8 +78,8 @@ test('enemy death, despawn timer and player resurrection complete correctly', t 
   player.hp = 0; player.deadUntil = world.state.time + 5; player.x = 8; player.z = -20;
   advance(world, 5.1); assert.equal(player.hp, player.maxHp); assert.equal(player.x, WORLD.spawnX); assert.equal(player.z, WORLD.spawnZ);
 });
-test('all three quest chapters can be completed, awarded once and reach level 5', t => {
-  const { world, player, profile } = setup(t);
+for (const classType of ['knight', 'mage', 'archer'] as const) test(`${classType}: all three quest chapters can be completed, awarded once and reach level 5`, t => {
+  const { world, player, profile } = setup(t, classType);
   const talk = () => { player.x = NPC.x; player.z = NPC.z; world.interact('alice'); };
   const kill = (kind: EnemyKind) => {
     const [id, enemy] = [...world.state.enemies.entries()].find(([, e]) => e.kind === kind)!;
@@ -94,9 +94,10 @@ test('all three quest chapters can be completed, awarded once and reach level 5'
   kill('slime'); kill('slime'); kill('slime'); talk(); assert.equal(profile.quest, 1);
   talk(); kill('boar'); kill('boar'); kill('wisp'); kill('wisp'); talk(); assert.equal(profile.quest, 2);
   talk(); kill('warden'); talk(); assert.equal(profile.quest, 3);
-  assert.equal(profile.level, 5); assert.ok(profile.inventory.some(i => i.kind === 'astral'));
+  const reward = CLASS_WEAPONS[classType][1];
+  assert.equal(profile.level, 5); assert.ok(profile.inventory.some(i => i.kind === reward));
   const gold = profile.gold; talk(); assert.equal(profile.gold, gold);
-  world.equip('alice', 'astral'); assert.equal(profile.weapon, 'astral');
+  world.equip('alice', reward); assert.equal(profile.weapon, reward);
 });
 test('SQLite restart preserves progress and private token prevents name impersonation', () => {
   const dir = mkdtempSync(join(tmpdir(), 'astra-save-')); const path = join(dir, 'game.sqlite');

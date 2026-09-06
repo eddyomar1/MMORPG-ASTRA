@@ -13,10 +13,14 @@ test('real WebSocket clients share one world, chat, loot, capacity and reconnect
   t.after(async () => { await Promise.race([Promise.all(rooms.map(r => r.leave().catch(() => {}))), delay(500)]); await game.close(); });
   const a = await client.joinById<WorldState>('valle', { name: 'Alice', token: 'a'.repeat(64), color: '#64b8ab' }); rooms.push(a);
   a.onMessage('*', () => {});
-  const b = await client.joinById<WorldState>('valle', { name: 'Bob', token: 'b'.repeat(64), color: '#cf8d60' }); rooms.push(b);
+  const b = await client.joinById<WorldState>('valle', { name: 'Bob', token: 'b'.repeat(64), color: '#cf8d60', classType: 'mage' }); rooms.push(b);
   for (const r of rooms) { r.onMessage('*', () => {}); r.reconnection.minUptime = 0; }
   await until(() => a.state?.players?.size === 2 && b.state?.players?.size === 2);
   assert.equal(a.roomId, b.roomId);
+  assert.equal(a.state.players.get(b.sessionId)!.classType, 'mage');
+  assert.equal(b.state.players.get(a.sessionId)!.classType, 'knight');
+  game.world.profiles.get(b.sessionId)!.inventory.push({ kind: 'oakStaff', count: 1 });
+  b.send('equip', 'oakStaff'); await until(() => a.state.players.get(b.sessionId)!.weapon === 'oakStaff');
   let chat = ''; b.onMessage('chat', (m: { text: string }) => { chat = m.text; }); a.send('chat', '<b>¡Hola, valle!</b>'); await until(() => chat.includes('¡Hola')); assert.equal(chat, '<b>¡Hola, valle!</b>');
   const start = a.state.players.get(a.sessionId)!.z;
   for (let i = 0; i < 12; i++) { a.send('input', { x: 0, z: -1, run: false }); await delay(50); }
@@ -31,7 +35,8 @@ test('real WebSocket clients share one world, chat, loot, capacity and reconnect
   let reconnected = false; a.onReconnect(() => { reconnected = true; }); a.connection.close(CloseCode.MAY_TRY_RECONNECT, 'test network interruption');
   await until(() => reconnected, 8000); assert.equal(game.world.state.players.size, 2);
   await assert.rejects(client.joinById('valle', { name: 'Invalid', token: 'short' }));
-  for (let i = 0; i < 6; i++) { const r = await client.joinById<WorldState>('valle', { name: `Player${i}`, token: String(i + 1).repeat(64), color: '#64b8ab' }); r.onMessage('*', () => {}); rooms.push(r); }
+  for (let i = 0; i < 6; i++) { const r = await client.joinById<WorldState>('valle', { name: `Player${i}`, token: String(i + 1).repeat(64), color: '#64b8ab', classType: ['knight', 'mage', 'archer'][i % 3] }); r.onMessage('*', () => {}); rooms.push(r); }
   await until(() => a.state.players.size === 8); await assert.rejects(client.joinById('valle', { name: 'Ninth', token: '9'.repeat(64) }));
   assert.equal(game.world.state.players.size, 8);
+  assert.equal([...a.state.players.values()].filter(p => p.classType === 'archer').length, 2);
 });

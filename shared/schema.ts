@@ -1,7 +1,9 @@
 import { schema, t, type SchemaType } from '@colyseus/schema';
 
 export const PlayerState = schema({
-  name: t.string().default(''), color: t.string().default(''), classType: t.string().default('traveler'),
+  name: t.string().default(''), color: t.string().default(''), classType: t.string().default('knight'),
+  weapon: t.string().default('starter'), armor: t.string().default(''), accessory: t.string().default(''),
+  guardUntil: t.float32().default(0), barrierUntil: t.float32().default(0), barrier: t.float32().default(0),
   x: t.float32().default(0), z: t.float32().default(17), yaw: t.float32().default(Math.PI),
   hp: t.float32().default(120), maxHp: t.uint16().default(120), level: t.uint8().default(1),
   moving: t.boolean().default(false), attackUntil: t.float32().default(0),
@@ -21,7 +23,13 @@ export const LootState = schema({
 }, 'LootState');
 export type LootState = SchemaType<typeof LootState>;
 
+export const ProjectileState = schema({
+  owner: t.string().default(''), target: t.string().default(''), kind: t.string().default('arrow'),
+  x: t.float32().default(0), z: t.float32().default(0), startX: t.float32().default(0), startZ: t.float32().default(0),
+  launched: t.float32().default(0), impactAt: t.float32().default(0),
+}, 'ProjectileState');
+
 export const WorldState = schema({
-  players: t.map(PlayerState), enemies: t.map(EnemyState), loot: t.map(LootState), time: t.float32().default(0),
+  players: t.map(PlayerState), enemies: t.map(EnemyState), loot: t.map(LootState), projectiles: t.map(ProjectileState), time: t.float32().default(0),
 }, 'WorldState');
 export type WorldState = SchemaType<typeof WorldState>;

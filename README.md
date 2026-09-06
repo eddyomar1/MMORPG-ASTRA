@@ -120,9 +120,9 @@ Para comprobar únicamente que el servidor responde, abre `http://localhost:3000
 | Rueda | Acercar / alejar |
 | Clic en enemigo / Tab | Seleccionar objetivo |
 | 1 / Espacio | Ataque básico; mantén Espacio para atacar repetidamente |
-| Q | Onda astral: daño de área, 6 s de recarga |
-| F | Luz vital: recupera 40 de vida, 12 s de recarga |
-| R | Poción: recupera 65 de vida, consume una poción |
+| Q | Habilidad ofensiva de tu clase; recarga de 6–7 s |
+| F | Guardia, Barrera o Evasión, según tu clase |
+| R | Usar el consumible elegido en el inventario |
 | E | Hablar con Elara, entregar misión o recoger botín cercano |
 | I / J / M | Inventario / diario / mapa |
 | Enter | Escribir y enviar chat |
@@ -131,9 +131,27 @@ Para comprobar únicamente que el servidor responde, abre `http://localhost:3000
 
 Al entrar, camina hasta **Elara**, junto al cristal del santuario, y pulsa **E** para aceptar la primera misión. Sigue el camino al norte para encontrar criaturas. Recoge sus objetos con **E**. Regresa a Elara para entregar cada misión y pulsa **E** otra vez para aceptar la siguiente.
 
-La aldea restaura la vida. Si mueres, reapareces en el santuario a los cinco segundos sin perder objetos. Los compañeros vivos que hayan participado recientemente y estén cerca de una baja reciben experiencia, oro y progreso de misión. El botín del suelo es compartido: lo recoge una sola persona. Cada participante del jefe recibe su propia espada astral.
+La aldea restaura la vida. Si mueres, reapareces en el santuario a los cinco segundos sin perder objetos. Los compañeros vivos que hayan participado recientemente y estén cerca de una baja reciben experiencia, oro y progreso de misión. El botín del suelo es compartido: lo recoge una sola persona. Cada participante del jefe recibe su propia arma avanzada de clase: filo astral, bastón del umbral o arco del umbral. Si una recompensa personal no cabe, Elara la guarda para que puedas reclamarla desde el inventario.
 
-El inventario permite equipar las espadas encontradas. Estando junto a Elara, puedes comprar pociones desde el inventario por 3 cristales o, si no tienes suficientes, 15 de oro. El sonido se activa con el botón del altavoz. En Ajustes puedes cambiar calidad, tamaño de interfaz y controles, sensibilidad, distribución para zurdos y atajos. Las preferencias se conservan en el navegador. Tab cambia de objetivo cuando el mundo tiene el foco; dentro de menús conserva la navegación normal.
+El inventario tiene 24 casillas y ranuras de arma, armadura y accesorio. Selecciona un objeto para comparar bonificaciones, equiparlo o asignar un consumible al botón rápido. El equipo permanece en la mochila al equiparlo; las pociones y materiales se apilan hasta 99 unidades por casilla. Puedes desequipar y vender equipo con Elara para hacer espacio.
+
+Estando junto a Elara, abre la tienda desde el inventario para comprar equipo y consumibles con oro. La poción básica cuesta 3 cristales o, si no tienes suficientes, 15 de oro; las armas avanzadas también se intercambian por 6 fragmentos. Las compras sin espacio no descuentan el pago. El sonido se activa con el botón del altavoz. En Ajustes puedes cambiar calidad, tamaño de interfaz y controles, sensibilidad, distribución para zurdos y atajos. Las preferencias se conservan en el navegador. Tab cambia de objetivo cuando el mundo tiene el foco; dentro de menús conserva la navegación normal.
+
+### Clases y objetos
+
+Elige una tarjeta en la pantalla de entrada para ver el personaje 3D y sus habilidades. En PC puedes recorrer las clases con las flechas del teclado. Un personaje nuevo conserva la clase elegida; al regresar, el selector muestra su clase guardada.
+
+| Clase | Vida inicial / alcance | Ataque | Q | F |
+| --- | --- | --- | --- | --- |
+| Caballero | 150 / 3,5 | Espadazo | Barrido cercano | Guardia: 60 % menos daño durante 4 s |
+| Mago | 100 / 9 | Pulso arcano | Explosión sobre el objetivo | Barrera: absorbe 45 de daño, +5 por nivel adicional, durante 5 s |
+| Arquero | 115 / 11 | Flecha | Disparo certero | Evasión de 3 unidades, sin atravesar obstáculos |
+
+Los ataques a distancia son dirigidos al objetivo, con impactos resueltos por el servidor y cancelación por obstáculos, muerte o salida de alcance. No requieren maná ni munición. Los alcances se expresan en unidades del mundo; la vida aumenta 25 por nivel. El equipo puede añadir vida, daño o protección.
+
+Hay **16 tipos de objeto**: poción de vida, cristal del valle, espada de hierro, filo astral, bastón de roble, bastón del umbral, arco de cazador, arco del umbral, coraza de hierro, túnica rúnica, armadura de cuero, amuleto de vitalidad, anillo de poder, poción de vida mayor, vendaje y fragmento del umbral. Las armas básicas de clase son gratuitas y no ocupan espacio.
+
+Las pociones recuperan 65 o 110 de vida y comparten una recarga de 4 segundos. El vendaje recupera 50 de vida durante 5 segundos: exige haber pasado 5 segundos fuera de combate y se interrumpe al causar o recibir daño. Equipar un objeto que aumenta la vida máxima no cura.
 
 ### Móvil y tableta
 
@@ -141,7 +159,7 @@ Abre la dirección LAN del PC en el navegador del teléfono. Puedes jugar en hor
 
 - **Joystick izquierdo:** movimiento gradual según la cámara. **Correr** alterna la carrera.
 - **Ataque:** mantén el botón para repetir ataques. Puedes mover el joystick y atacar simultáneamente.
-- **Onda astral, Luz vital y Poción:** botones junto al ataque; muestran el tiempo de recarga.
+- **Dos habilidades y consumible:** botones junto al ataque; cambian con tu clase y muestran el tiempo de recarga.
 - **Cámara:** arrastra una zona libre del mundo. Pellizca para acercar o alejar; los botones **+ / ◎ / −** permiten zoom y centrado sin gestos.
 - **Objetivo:** toca un enemigo o usa **Cambiar objetivo**. El desplazamiento al tocar terreno se activa opcionalmente en Ajustes.
 - **Hablar / recoger:** usa el botón contextual al acercarte a Elara o a un botín.
@@ -156,17 +174,19 @@ La calidad **Automática** ajusta el detalle tras medir el coste de renderizado.
 
 - Aldea segura, bosque y ruinas; escenario low-poly original generado con geometría local.
 - Cámara orbital en tercera persona; personajes y criaturas con animación procedural.
-- Apariencias Viajero, Guardián y Mago y color de estandarte. Son opciones visuales; comparten las mismas reglas de combate en esta entrega.
+- Caballero, Mago y Arquero con siluetas, armas y habilidades distintas; selector accesible con tarjetas y una única vista previa 3D.
 - Brotes silvestres, jabalíes, ecos y el Guardián del umbral.
 - Combate cooperativo, dos habilidades, pociones, muerte y reaparición.
-- Experiencia, niveles 1–5, oro, botín, inventario y armas equipables.
+- Experiencia, niveles 1–5, oro, tablas de botín, 16 objetos, 24 casillas, armas, armaduras, accesorios y tienda de Elara.
 - Tres misiones encadenadas y combate final de élite.
 - Chat local, grupo visible, minimapa, mapa completo y ayuda de controles.
 - Guardado SQLite, identificación privada, exportación/importación de acceso y reconexión breve.
 
 ## Guardados y personajes
 
-La base de datos se crea en **`data/astra.sqlite`** en el PC servidor. Guarda nombre, color, nivel, experiencia, oro, inventario, arma y progreso de misiones. Se actualiza al cambiar el progreso, periódicamente, al salir y al cerrar normalmente el servidor. Tras reiniciar, los personajes entran en la aldea con vida completa; enemigos, botín temporal y posiciones se recrean.
+La base de datos se crea en **`data/astra.sqlite`** en el PC servidor. Guarda nombre, color, clase, nivel, experiencia, oro, inventario, equipo, consumible seleccionado, recompensas pendientes y progreso de misiones. Se actualiza al cambiar el progreso, periódicamente, al salir y al cerrar normalmente el servidor. Tras reiniciar, los personajes entran en la aldea con vida completa; enemigos, proyectiles, defensas temporales, botín del suelo y posiciones se recrean.
+
+**Actualización desde las clases cosméticas:** detén el servidor con Ctrl+C y copia la carpeta `data/` completa antes de ejecutar la versión nueva. Los perfiles antiguos se migran a la versión 2 y ofrecen una elección gratuita de clase al conectar, conservando su progreso. Confirma la elección para habilitar el movimiento y el combate. Tus espadas permanecen en el inventario; si eliges mago o arquero, puedes intercambiar con Elara las espadas antiguas por armas equivalentes de tu clase. Las copias que excedan la capacidad quedan como recompensas pendientes. Una versión de perfil desconocida se rechaza sin sobrescribirla.
 
 El navegador conserva un token aleatorio de 256 bits. **El nombre no es una contraseña** y dos personas con el mismo nombre tienen personajes distintos. El token nunca se sincroniza con otros jugadores; la base de datos almacena su hash.
 
@@ -229,6 +249,8 @@ En desarrollo, reinicia `npm run dev` después de cambiar el servidor. La recarg
 Las pruebas de navegador usan Chromium en `/usr/bin/chromium`; configura `CHROMIUM_PATH` con la ruta de tu instalación si es distinta. No usan la base de datos de tus partidas. Las capturas y trazas se guardan en `test-results/`.
 
 Las pruebas cubren velocidad y colisiones, alcance y recargas, recogida simultánea de botín, economía, recompensas cooperativas, reaparición, la campaña completa, guardado tras reabrir SQLite, sincronización, chat, ocho conexiones y reconexión. Las pruebas de navegador comprueban la entrada de dos jugadores, chat, misión, inventario, mapa y recuperación del personaje, además de movimiento y combate multitáctiles enviados por Chromium, cancelación, paneles con vida actualizada, distintos tamaños de pantalla y preferencias. Las pruebas táctiles usan CDP en Chromium; no sustituyen una comprobación en Safari/iOS ni del teclado virtual, temperatura o batería de un dispositivo físico.
+
+Las pruebas de clases y objetos verifican impactos diferidos y cancelación de proyectiles, explosiones, guardia, barrera, evasión, vendajes, restricciones de equipo, recargas compartidas, compras sin pérdida de pago, recompensas pendientes y migraciones repetibles. La campaña se comprueba con las tres clases. En el navegador se comprueban selección con teclado, vista previa única, tamaños de pantalla con interfaz al 150 %, recuperación de clase guardada y migración e intercambios desde una pantalla móvil.
 
 ## Organización
 

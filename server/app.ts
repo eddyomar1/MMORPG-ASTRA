@@ -30,6 +30,7 @@ export async function createGameServer({ port = 3000, dbPath = 'data/astra.sqlit
       this.onMessage('action', (c, m) => world.action(c.sessionId, m));
       this.onMessage('interact', (c, m) => world.interact(c.sessionId, m));
       this.onMessage('equip', (c, m) => world.equip(c.sessionId, m));
+      this.onMessage('chooseClass', (c, m) => world.chooseClass(c.sessionId, m));
       this.onMessage('chat', (c, m) => world.chat(c.sessionId, m));
       this.onMessage('profile', c => c.send('profile', world.profiles.get(c.sessionId)));
       this.onMessage('ping', (c, m) => { if (typeof m === 'number' && Number.isFinite(m)) c.send('pong', m); });
@@ -43,7 +44,7 @@ export async function createGameServer({ port = 3000, dbPath = 'data/astra.sqlit
       return true;
     }
     onJoin(client: Client, options: { token: string; name: string; color: string; classType?: keyof typeof CHARACTER_CLASSES }) {
-      world.add(client.sessionId, options.token, options.name.trim(), options.color, options.classType ?? 'traveler');
+      world.add(client.sessionId, options.token, options.name.trim(), options.color, options.classType ?? 'knight');
     }
     async onDrop(client: Client) {
       const player = world.state.players.get(client.sessionId); if (player) { player.connected = false; player.moving = false; }
@@ -70,6 +71,13 @@ export async function createGameServer({ port = 3000, dbPath = 'data/astra.sqlit
       app.disable('x-powered-by');
       app.get('/api/server', (_req, res) => res.json({ name: 'Valle de Auralia', roomId: 'valle', maxPlayers: WORLD.maxPlayers, players: world?.state.players.size ?? 0, addresses: currentAddresses() }));
       app.get('/api/health', (_req, res) => res.json({ ok: true }));
+      app.post('/api/character', express.json({ limit: '2kb' }), (req, res) => {
+        res.set('Cache-Control', 'no-store');
+        const token = req.body?.token;
+        if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) { res.status(400).json({ error: 'Identidad inválida.' }); return; }
+        try { const p = store.load(token); res.json(p ? { name: p.name, classType: p.classType, classChoicePending: p.classChoicePending } : null); }
+        catch (error) { res.status(409).json({ error: error instanceof Error ? error.message : 'No se pudo leer el personaje.' }); }
+      });
       if (vite) app.use(vite.middlewares);
       else app.use(express.static(resolve('dist/client')));
     },

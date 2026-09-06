@@ -1,5 +1,5 @@
 import { Client, type Room } from '@colyseus/sdk';
-import { CHARACTER_CLASSES, COLORS, ENEMIES, ITEMS, NPC, OBSTACLES, QUESTS, WORLD, questReady, xpForLevel, type CharacterClass, type EnemyKind, type ItemKind, type Profile } from '../shared/content';
+import { CHARACTER_CLASSES, COLORS, ENEMIES, INVENTORY_CAPACITY, ITEMS, NPC, OBSTACLES, QUESTS, WORLD, equipmentStats, questReady, xpForLevel, type CharacterClass, type EnemyKind, type ItemCategory, type ItemKind, type Profile } from '../shared/content';
 import type { WorldState } from '../shared/schema';
 import { WorldView } from './scene';
 import { $, escapeHTML as esc, icon, mountUI, showModal, toast } from './ui';
@@ -9,8 +9,10 @@ import { TouchControls } from './touch-controls';
 import { defaults, parsePreferences, bindingError, bindingLabels, keyLabel, type Binding, type Preferences } from './preferences';
 import './style.css';
 import './responsive.css';
+import './classes.css';
 
 mountUI();
+$('class-preview').append($('world'));
 const audio = new GameAudio();
 let view: WorldView;
 try { view = new WorldView($<HTMLCanvasElement>('world')); }
@@ -33,18 +35,41 @@ if (!read('astra-preferences') && read('astra-low') === 'yes') preferences.quali
 let token = read('astra-token');
 if (!token || !/^[a-f0-9]{64}$/.test(token)) { token = [...crypto.getRandomValues(new Uint8Array(32))].map(n => n.toString(16).padStart(2, '0')).join(''); save('astra-token', token); }
 const savedClass = read('astra-class') as CharacterClass | null;
-let selectedClass: CharacterClass = savedClass && Object.hasOwn(CHARACTER_CLASSES, savedClass) ? savedClass : 'traveler';
+let selectedClass: CharacterClass = savedClass && Object.hasOwn(CHARACTER_CLASSES, savedClass) ? savedClass : 'knight';
+let savedCharacter: { name: string; classType: CharacterClass; classChoicePending: boolean } | null = null;
 $<HTMLInputElement>('name').value = read('astra-name') || '';
 color = COLORS.includes(read('astra-color') || '') ? read('astra-color')! : COLORS[0];
-function colors() { $('colors').innerHTML = COLORS.map((c, i) => `<button type="button" aria-label="Estandarte ${['jade', 'ámbar', 'amatista', 'oro'][i]}" aria-pressed="${c === color}" data-color="${c}" class="color-choice ${c === color ? 'selected' : ''}" style="--swatch:${c}"></button>`).join(''); $('colors').querySelectorAll<HTMLButtonElement>('button').forEach(b => b.onclick = () => { color = b.dataset.color!; colors(); }); }
+function colors() { $('colors').innerHTML = COLORS.map((c, i) => `<button type="button" aria-label="Estandarte ${['jade', 'ámbar', 'amatista', 'oro'][i]}" aria-pressed="${c === color}" data-color="${c}" class="color-choice ${c === color ? 'selected' : ''}" style="--swatch:${c}"></button>`).join(''); $('colors').querySelectorAll<HTMLButtonElement>('button').forEach(b => b.onclick = () => { color = b.dataset.color!; colors(); updateClassLabel(); }); }
 function updateClassLabel() {
   const info = CHARACTER_CLASSES[selectedClass];
   $('class-label').textContent = info.label;
   $('class-label').title = info.description;
-  $('classes').innerHTML = Object.entries(CHARACTER_CLASSES).map(([key, info]) => `<button type="button" data-class="${key}" class="class-choice ${selectedClass === key ? 'selected' : ''}" style="--swatch:${info.color}; --glow:${info.accent}"><span>${info.name}</span></button>`).join('');
-  $('classes').querySelectorAll<HTMLButtonElement>('button').forEach(b => b.onclick = () => { selectedClass = b.dataset.class as CharacterClass; save('astra-class', selectedClass); updateClassLabel(); });
+  if (!$('classes').childElementCount) {
+    $('classes').innerHTML = classCards('class');
+    $('classes').addEventListener('change', e => { selectedClass = (e.target as HTMLInputElement).value as CharacterClass; save('astra-class', selectedClass); updateClassLabel(); });
+  }
+  $('classes').querySelectorAll<HTMLInputElement>('input').forEach(radio => { radio.checked = radio.value === selectedClass; radio.disabled = !!savedCharacter && !savedCharacter.classChoicePending; });
+  $('class-detail').innerHTML = `<h2>${info.name}</h2><p>${info.description}</p><div class="class-stats"><span>${info.health} de vida</span><span>Alcance ${info.range}</span><span>Dificultad ${info.difficulty.toLowerCase()}</span></div><ul>${Object.values(info.abilities).map(a => `<li><b>${a.name}</b>: ${a.description} (${a.cooldown} s)</li>`).join('')}</ul>`;
+  $('class-preview').setAttribute('aria-label', `Vista previa 3D: ${info.name}`);
+  if (!joining) $('join').innerHTML = `Entrar como ${info.name.toLowerCase()} ${icon('arrow')}`;
+  if (!view.playing) view.previewClass(selectedClass, color);
+}
+function classCards(group: string) {
+  return Object.entries(CHARACTER_CLASSES).map(([key, info]) => `<label class="class-card" style="--swatch:${info.color};--glow:${info.accent}"><input type="radio" name="${group}" value="${key}" data-class="${key}" ${key === selectedClass ? 'checked' : ''}><span class="class-check">✓ Seleccionado</span><span class="class-symbol">${icon(info.abilities.attack.icon)}</span><strong>${info.name}</strong><small>${info.role}</small><small>${info.health} vida · Alcance ${info.range}</small></label>`).join('');
 }
 colors(); updateClassLabel();
+async function loadCharacter() {
+  const response = await fetch('/api/character', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }), signal: AbortSignal.timeout(4000) });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'No se pudo recuperar el personaje.');
+  savedCharacter = data;
+  if (savedCharacter) {
+    if (!savedCharacter.classChoicePending) { selectedClass = savedCharacter.classType; $<HTMLInputElement>('name').value = savedCharacter.name; }
+    $('class-persistence').textContent = savedCharacter.classChoicePending ? 'Tu personaje conserva todo su progreso. Al conectar podrás confirmar tu nueva clase gratuitamente.' : `Continuarás la historia de ${savedCharacter.name}, ${CHARACTER_CLASSES[savedCharacter.classType].name.toLowerCase()}. Su clase ya está elegida.`;
+    updateClassLabel();
+  }
+}
+void loadCharacter().catch(error => { $('join-error').textContent = error.message; });
 async function loadServerInfo() {
   const response = await fetch('/api/server', { signal: AbortSignal.timeout(4000) });
   if (!response.ok) throw new Error('El servidor no responde.'); serverInfo = await response.json(); $('lobby-count').textContent = String(serverInfo.players);
@@ -58,18 +83,32 @@ async function join() {
   if (!/^[\p{L}\p{N} _-]{2,18}$/u.test(name)) { $('join-error').textContent = 'Elige un nombre de 2–18 letras o números.'; return; }
   joining = true; $('join-error').textContent = ''; $<HTMLButtonElement>('join').disabled = true; $('join').textContent = 'Abriendo las puertas…';
   try {
+    await loadCharacter();
     await loadServerInfo();
     const next = await client.joinById<WorldState>(serverInfo.roomId, { token, name, color, classType: selectedClass });
     next.reconnection.minUptime = 0;
     // The join handshake precedes the first full state packet. Rendering an
     // empty reflected schema here would stop Babylon's render loop.
     room = next; connected = true; view.selfId = room.sessionId; view.playing = true; view.state = undefined;
+    document.body.prepend(view.canvas); view.camera.lowerRadiusLimit = 11; view.engine.resize();
     view.camera.alpha = Math.PI / 2; view.camera.beta = 0.87; view.camera.radius = 23; view.camera.upperRadiusLimit = 36;
     $('welcome').hidden = true; $('hud').hidden = false; $('connection-lost').hidden = true; $('connection').textContent = 'Conectado';
     $('tutorial').hidden = read('astra-tutorial') === 'done'; document.body.classList.add('playing'); setChat(!touchMode && !document.body.classList.contains('compact')); updateTutorial();
     save('astra-name', name); save('astra-color', color);
     room.onStateChange(state => { if (state.players && state.enemies && state.loot) view.state = state; });
-    room.onMessage('profile', (p: Profile) => { profile = p; save('astra-name', p.name); if (p.classType) { selectedClass = p.classType; updateClassLabel(); } updateProfile(); });
+    room.onMessage('profile', (p: Profile) => {
+      const previous = profile; profile = p; save('astra-name', p.name);
+      if (p.classType) { selectedClass = p.classType; save('astra-class', p.classType); updateClassLabel(); }
+      updateProfile();
+      if (p.classChoicePending) {
+        if (panel !== 'migration' || !$<HTMLDialogElement>('modal').open) {
+          open('Elige tu nueva clase', `<p>Tus apariencias anteriores ahora tienen habilidades propias. Esta elección es gratuita y conserva tu nivel, oro, misiones y objetos.</p><fieldset class="class-fieldset"><legend>Tu clase definitiva</legend><div class="classes-grid">${classCards('migration')}</div></fieldset><p id="migration-detail"></p><button id="confirm-class" class="primary">Confirmar clase</button>`, 'migration');
+          const describe = () => { const key = document.querySelector<HTMLInputElement>('input[name="migration"]:checked')!.value as CharacterClass; $('migration-detail').textContent = CHARACTER_CLASSES[key].description; };
+          document.querySelectorAll('input[name="migration"]').forEach(r => r.addEventListener('change', describe)); describe();
+          $('confirm-class').onclick = () => send('chooseClass', document.querySelector<HTMLInputElement>('input[name="migration"]:checked')!.value);
+        }
+      } else if (previous?.classChoicePending && panel === 'migration') $<HTMLDialogElement>('modal').close();
+    });
     room.onMessage('notice', (message: string) => { toast(message); if ($<HTMLDialogElement>('modal').open) $('modal-health').textContent = message; });
     room.onMessage('chat', (message: { name: string; text: string; system: boolean }) => {
       const line = document.createElement('p'); line.className = message.system ? 'system' : '';
@@ -93,7 +132,7 @@ async function join() {
     const raw = error instanceof Error ? error.message : String(error);
     const message = /locked|full|seat/i.test(raw) ? 'El valle está lleno. Espera a que haya una plaza libre.' : /already|personaje ya/i.test(raw) ? 'Este personaje está abierto en otra pestaña. Ciérrala antes de entrar.' : /fetch|network|connect|ECONN|not found/i.test(raw) ? 'No se pudo conectar. Comprueba la red y que el servidor esté encendido.' : raw;
     $('join-error').textContent = message; if (view.playing) { $('reconnect-text').textContent = message; toast(message); }
-  } finally { joining = false; $<HTMLButtonElement>('join').disabled = false; $('join').innerHTML = `Entrar al valle ${icon('arrow')}`; }
+  } finally { joining = false; $<HTMLButtonElement>('join').disabled = false; updateClassLabel(); }
 }
 $('join-form').addEventListener('submit', e => { e.preventDefault(); void join(); });
 $('retry').onclick = () => void join();
@@ -101,7 +140,7 @@ $('dismiss-tutorial').onclick = () => { $('tutorial').hidden = true; save('astra
 view.onSelect = id => { view.selected = id; };
 view.onGround = (x, z) => { if (canPlay()) { send('go', { x, z }); advanceTutorial(0); } };
 function isTyping() { return !!document.activeElement?.matches('input, textarea, select, [contenteditable="true"]'); }
-function canPlay() { return connected && view.playing && !document.hidden && !$<HTMLDialogElement>('modal').open && !isTyping() && !document.body.classList.contains('menu-open') && (view.state?.players.get(view.selfId)?.hp ?? 0) > 0; }
+function canPlay() { return connected && view.playing && !profile?.classChoicePending && !document.hidden && !$<HTMLDialogElement>('modal').open && !isTyping() && !document.body.classList.contains('menu-open') && (view.state?.players.get(view.selfId)?.hp ?? 0) > 0; }
 function selectNext() {
   const p = view.state?.players.get(view.selfId); if (!p) return;
   const targets = [...view.state!.enemies.entries()].filter(([, e]) => {
@@ -178,6 +217,21 @@ function applyPreferences(graphics = true) {
   $('interact-button').querySelector('kbd')!.textContent = keyLabel(preferences.bindings.interact);
   for (const [id, action] of [['inventory-button', 'inventory'], ['journal-button', 'journal'], ['map-button', 'map']] as const) $(id).querySelector('kbd')!.textContent = keyLabel(preferences.bindings[action]);
   updateTutorial();
+  updateAbilities();
+}
+function updateAbilities() {
+  const def = CHARACTER_CLASSES[profile?.classType ?? selectedClass];
+  for (const action of ['attack', 'nova', 'heal'] as const) {
+    const ability = def.abilities[action], button = $(action);
+    button.querySelector('small')!.textContent = ability.name;
+    button.querySelector('svg')!.outerHTML = icon(ability.icon);
+    button.title = `${ability.name} · ${keyLabel(preferences.bindings[action])} · ${ability.description} · ${ability.cooldown} s`;
+    button.setAttribute('aria-label', button.title);
+  }
+  const consumable = ITEMS[profile?.consumable ?? 'potion'];
+  $('potion').querySelector('small')!.textContent = profile?.consumable === 'bandage' ? 'Vendaje' : profile?.consumable === 'greaterPotion' ? 'Poción mayor' : 'Poción';
+  $('potion').title = `${consumable.name} · ${keyLabel(preferences.bindings.potion)} · ${consumable.description}`;
+  $('potion').setAttribute('aria-label', $('potion').title);
 }
 function persistPreferences() { save('astra-preferences', JSON.stringify(preferences)); stopMovement(); applyPreferences(); }
 function inputMethod(touchInput: boolean) {
@@ -254,7 +308,9 @@ function updateProfile() {
   if (!profile) return;
   $('player-name').textContent = profile.name; $('player-name').title = profile.name; $('level-badge').textContent = String(profile.level); const classInfo = CHARACTER_CLASSES[profile.classType ?? selectedClass]; $('class-label').textContent = classInfo.label; $('gold').textContent = `${profile.gold} ◈`; $('xp-text').textContent = profile.level === 5 ? 'NIVEL MÁXIMO' : `${profile.xp} / ${xpForLevel(profile.level)} EXP`;
   $('xp-fill').style.width = `${profile.level === 5 ? 100 : profile.xp / xpForLevel(profile.level) * 100}%`;
-  $('potion-count').textContent = String(profile.inventory.find(i => i.kind === 'potion')?.count ?? 0);
+  $('potion-count').textContent = String(profile.inventory.filter(i => i.kind === profile!.consumable).reduce((sum, i) => sum + i.count, 0));
+  document.querySelector('.player-heading > span')!.textContent = classInfo.name.toUpperCase();
+  updateAbilities();
   const quest = QUESTS[profile.quest];
   $('quest-title').textContent = quest?.title ?? 'El valle vuelve a brillar';
   $('quest-summary').textContent = !quest ? 'Tu aventura ha dejado huella en Auralia.' : !profile.questAccepted ? 'Habla con Elara junto al santuario para aceptar esta misión.' : questReady(profile) ? 'Regresa con Elara para recibir tu recompensa.' : quest.text;
@@ -285,7 +341,7 @@ setInterval(() => {
   if (html !== partyHTML) { $('party').innerHTML = html; partyHTML = html; }
   const enemy = state.enemies.get(view.selected); $('target').hidden = !enemy || enemy.hp <= 0;
   if (enemy && enemy.hp <= 0) view.selected = '';
-  if (enemy) { $('target').classList.toggle('out-of-range', Math.hypot(p.x - enemy.x, p.z - enemy.z) > (enemy.kind === 'warden' ? 4.5 : 3.5)); $('target').setAttribute('aria-label', Math.hypot(p.x - enemy.x, p.z - enemy.z) > (enemy.kind === 'warden' ? 4.5 : 3.5) ? 'Objetivo fuera de alcance cuerpo a cuerpo' : 'Objetivo cercano'); $('target-name').textContent = ENEMIES[enemy.kind as EnemyKind].name; $('target-kind').textContent = enemy.kind === 'warden' ? 'ÉLITE · RUINAS DEL UMBRAL' : 'CRIATURA DEL VALLE'; $('target-hp').style.width = `${enemy.hp / enemy.maxHp * 100}%`; $('target-value').textContent = `${Math.ceil(enemy.hp)} / ${enemy.maxHp}`; }
+  if (enemy) { const range = CHARACTER_CLASSES[profile?.classType ?? selectedClass].range + (enemy.kind === 'warden' ? 1 : 0); const outside = Math.hypot(p.x - enemy.x, p.z - enemy.z) > range; $('target').classList.toggle('out-of-range', outside); $('target').setAttribute('aria-label', outside ? 'Objetivo fuera de alcance' : 'Objetivo dentro de alcance'); $('target-name').textContent = ENEMIES[enemy.kind as EnemyKind].name; $('target-kind').textContent = enemy.kind === 'warden' ? 'ÉLITE · RUINAS DEL UMBRAL' : 'CRIATURA DEL VALLE'; $('target-hp').style.width = `${enemy.hp / enemy.maxHp * 100}%`; $('target-value').textContent = `${Math.ceil(enemy.hp)} / ${enemy.maxHp}`; }
   const nearNPC = Math.hypot(p.x - NPC.x, p.z - NPC.z) <= 4;
   const nearLoot = [...state.loot.values()].some(l => Math.hypot(p.x - l.x, p.z - l.z) < 3);
   $('interaction').hidden = !(nearNPC || nearLoot) || p.hp <= 0;
@@ -302,26 +358,59 @@ function open(title: string, html: string, type: string) {
   if (!$<HTMLDialogElement>('modal').open) previousFocus = document.activeElement as HTMLElement;
   stopMovement(); closeMenu(); panel = type; $('modal-live').hidden = !view.playing; showModal(title, html);
 }
-$('modal').addEventListener('close', () => { rebinding = undefined; stopMovement(); if (previousFocus?.isConnected && previousFocus.getClientRects().length) previousFocus.focus({ preventScroll: true }); else view.canvas.focus({ preventScroll: true }); });
+$('modal').addEventListener('close', () => { rebinding = undefined; stopMovement(); if (profile?.classChoicePending) { send('profile'); return; } if (previousFocus?.isConnected && previousFocus.getClientRects().length) previousFocus.focus({ preventScroll: true }); else view.canvas.focus({ preventScroll: true }); });
+$('modal').addEventListener('cancel', e => { if (profile?.classChoicePending) e.preventDefault(); });
+$('modal-close').addEventListener('click', () => { if (profile?.classChoicePending) send('profile'); });
 function refreshPanel(render: () => void) {
   const focused = document.activeElement as HTMLElement | null, id = focused?.id, item = focused?.dataset.item;
-  const scroll = $('modal-body').scrollTop; render();
+  const scroll = $('modal-body').scrollTop, shopOpen = $<HTMLDetailsElement>('shop-catalog')?.open; render();
+  if ($('shop-catalog') && shopOpen) $<HTMLDetailsElement>('shop-catalog').open = true;
   const next = id ? document.getElementById(id) : item ? document.querySelector<HTMLElement>(`[data-item="${item}"]`) : null;
   next?.focus({ preventScroll: true }); $('modal-body').scrollTop = scroll;
 }
+let inventoryFilter: ItemCategory | 'all' = 'all';
 function inventory(refresh = false) {
   if (!profile) return toast('Entra al valle para abrir tu inventario.');
-  const html = `<div class="inventory-summary"><span>${icon('bag')} ${profile.inventory.length}/12 espacios</span><strong>${profile.gold} ◈</strong></div><div class="equipped"><span>ARMA EQUIPADA</span><strong>${profile.weapon === 'starter' ? 'Espada de viajero' : ITEMS[profile.weapon].name}</strong><small>Daño adicional: +${profile.weapon === 'astral' ? 16 : profile.weapon === 'iron' ? 7 : 0}</small></div><div class="inventory-grid">${Array.from({ length: 12 }, (_, i) => { const stack = profile!.inventory[i]; return stack ? `<button class="item-slot" data-item="${stack.kind}" title="${ITEMS[stack.kind].name}" style="--item-color:${ITEMS[stack.kind].color}"><span>${ITEMS[stack.kind].icon}</span><b>${stack.count}</b><small>${ITEMS[stack.kind].name}</small></button>` : '<div class="item-slot empty"><span>·</span></div>'; }).join('')}</div><div id="item-detail" class="item-detail">Selecciona un objeto para usarlo o equiparlo.</div><div class="shop-row"><p><b>Elara · Suministros</b><br>1 poción por 3 cristales o 15 de oro.<br><small>Debes estar junto al santuario.</small></p><button id="buy-potion" class="secondary">Comprar poción</button></div>`;
+  const stats = equipmentStats(profile), list = profile.inventory.filter(i => inventoryFilter === 'all' || ITEMS[i.kind].category === inventoryFilter);
+  const categories = [['all', 'Todo'], ['weapon', 'Armas'], ['armor', 'Armaduras'], ['accessory', 'Accesorios'], ['consumable', 'Consumibles'], ['material', 'Materiales']];
+  const html = `<div class="inventory-summary"><span>${icon('bag')} ${profile.inventory.length}/${INVENTORY_CAPACITY} espacios</span><strong>${profile.gold} ◈</strong></div>
+    <p>${CHARACTER_CLASSES[profile.classType].name} · ${stats.health} vida · +${stats.damage} daño · ${stats.defense} protección</p>
+    <div class="equipment-grid">${(['weapon', 'armor', 'accessory'] as const).map((slot, i) => { const key = profile![slot]; return `<div class="equipped"><span>${['ARMA', 'ARMADURA', 'ACCESORIO'][i]}</span><strong>${key === 'starter' ? CHARACTER_CLASSES[profile!.classType].starter : key ? ITEMS[key].name : 'Sin equipar'}</strong>${key && key !== 'starter' ? `<button class="secondary" id="unequip-${slot}" data-unequip="${['starter', 'removeArmor', 'removeAccessory'][i]}">Desequipar</button>` : ''}</div>`; }).join('')}</div>
+    ${profile.pendingRewards.length ? `<div class="pending-rewards"><b>Elara guarda tus recompensas</b><p>${profile.pendingRewards.map(i => `${i.count} × ${ITEMS[i.kind].name}`).join(' · ')}</p><button id="claim-rewards" class="secondary">Reclamar junto a Elara</button></div>` : ''}
+    <div class="inventory-filters" role="group" aria-label="Filtrar objetos">${categories.map(([key, label]) => `<button id="filter-${key}" class="secondary" data-filter="${key}" aria-pressed="${inventoryFilter === key}">${label}</button>`).join('')}</div>
+    <div class="inventory-grid">${list.map((stack, i) => `<button class="item-slot" id="item-${i}" data-item="${stack.kind}" title="${ITEMS[stack.kind].name} · ${ITEMS[stack.kind].rarity}" style="--item-color:${ITEMS[stack.kind].color}"><span>${ITEMS[stack.kind].icon}</span><b>${stack.count}</b><small>${ITEMS[stack.kind].name}</small></button>`).join('') || '<p>No hay objetos en esta categoría.</p>'}</div>
+    <div id="item-detail" class="item-detail" aria-live="polite">Selecciona un objeto para comparar, usar o equipar.</div>
+    <div class="shop-row"><p><b>Elara · Suministros</b><br>1 poción por 3 cristales o 15 de oro.<br><small>Acércate a Elara para comprar, vender o intercambiar.</small></p><button id="buy-potion" class="secondary">Comprar poción</button></div>
+    <details id="shop-catalog" class="shop-catalog"><summary>Ver tienda de Elara · 16 objetos</summary>${Object.entries(ITEMS).map(([key, item]) => `<div class="shop-entry"><div><strong>${item.icon} ${item.name}</strong><small>${item.rarity}${item.classType ? ` · ${CHARACTER_CLASSES[item.classType].name}` : ''} · ${item.description}</small></div><div class="shop-actions"><button id="buy-${key}" class="secondary" data-buy="${key}">${item.price} oro${key === 'potion' ? ' / 3 cristales' : ''}</button>${item.fragments ? `<button id="trade-${key}" class="secondary" data-trade="${key}">${item.fragments} fragmentos</button>` : ''}</div></div>`).join('')}</details>`;
   if (!refresh) selectedItem = undefined;
   if (refresh) $('modal-body').innerHTML = html; else open('Tu inventario', html, 'inventory');
   function detail(kind: ItemKind) {
     selectedItem = kind; const item = ITEMS[kind], owned = profile?.inventory.some(i => i.kind === kind);
     document.querySelectorAll<HTMLElement>('[data-item]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.item === kind)));
-    $('item-detail').innerHTML = `<strong>${item.name}</strong><p>${item.description}</p>${!owned ? '<p>Ya no tienes este objeto.</p>' : kind === 'crystal' ? '' : `<button id="use-item" class="secondary" ${profile?.weapon === kind ? 'disabled' : ''}>${kind === 'potion' ? 'Usar poción' : profile?.weapon === kind ? 'Equipada' : 'Equipar arma'}</button>`}`;
-    if ($('use-item')) $('use-item').onclick = () => kind === 'potion' ? act('potion', true) : send('equip', kind);
+    const compatible = !item.classType || item.classType === profile!.classType;
+    const isEquipment = item.category === 'weapon' || item.category === 'armor' || item.category === 'accessory';
+    const equipped = isEquipment && profile![item.category as 'weapon' | 'armor' | 'accessory'] === kind;
+    let comparison = '';
+    if (isEquipment && compatible) {
+      const next = equipmentStats({ ...profile!, [item.category]: kind });
+      comparison = `<p>Al equipar: ${(['health', 'damage', 'defense'] as const).map((key, i) => `${['Vida', 'Daño', 'Protección'][i]} ${next[key] - stats[key] >= 0 ? '+' : ''}${next[key] - stats[key]}`).join(' · ')}</p>`;
+    }
+    $('item-detail').innerHTML = `<strong>${item.icon} ${item.name}</strong><p>${item.rarity}${item.classType ? ` · ${CHARACTER_CLASSES[item.classType].name}` : ' · Todas las clases'}</p><p>${item.description}</p>${comparison}
+      ${!owned ? '<p>Ya no tienes este objeto.</p>' : !compatible ? `<p>Requiere la clase ${CHARACTER_CLASSES[item.classType!].name}.</p>` : isEquipment ? `<button id="use-item" class="secondary" ${equipped ? 'disabled' : ''}>${equipped ? 'Equipado' : 'Equipar'}</button>` : item.category === 'consumable' ? `<button id="select-consumable" class="secondary" ${profile!.consumable === kind ? 'disabled' : ''}>${profile!.consumable === kind ? 'En el botón rápido' : 'Asignar al botón rápido'}</button><button id="use-item" class="secondary">Usar ${item.name.toLowerCase()}</button>` : ''}
+      ${owned && isEquipment && (!equipped || profile!.inventory.filter(i => i.kind === kind).length > 1) ? `<button id="sell-item" class="secondary">Vender una copia con Elara · ${Math.floor(item.price / 4)} oro</button>` : ''}
+      ${owned && profile!.legacyExchange && profile!.classType !== 'knight' && (profile!.legacyWeapons[kind as 'iron' | 'astral'] ?? 0) > 0 ? '<button id="exchange-item" class="secondary">Cambiar por arma de mi clase · Gratis con Elara</button>' : ''}`;
+    if ($('use-item')) $('use-item').onclick = () => { if (item.category === 'consumable') { send('equip', kind); act('potion', true); } else send('equip', kind); };
+    if ($('select-consumable')) $('select-consumable').onclick = () => send('equip', kind);
+    if ($('sell-item')) $('sell-item').onclick = () => send('interact', { op: 'sell', kind });
+    if ($('exchange-item')) $('exchange-item').onclick = () => send('interact', { op: 'exchange', kind });
   }
   document.querySelectorAll<HTMLButtonElement>('[data-item]').forEach(b => b.onclick = () => detail(b.dataset.item as ItemKind));
   if (selectedItem) detail(selectedItem);
+  document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(b => b.onclick = () => { inventoryFilter = b.dataset.filter as typeof inventoryFilter; refreshPanel(() => inventory(true)); });
+  document.querySelectorAll<HTMLButtonElement>('[data-unequip]').forEach(b => b.onclick = () => send('equip', b.dataset.unequip));
+  document.querySelectorAll<HTMLButtonElement>('[data-buy]').forEach(b => b.onclick = () => send('interact', { op: 'buy', kind: b.dataset.buy }));
+  document.querySelectorAll<HTMLButtonElement>('[data-trade]').forEach(b => b.onclick = () => send('interact', { op: 'trade', kind: b.dataset.trade }));
+  if ($('claim-rewards')) $('claim-rewards').onclick = () => send('interact', { op: 'claim' });
   $('buy-potion').onclick = () => { const p = view.state?.players.get(view.selfId); if (!p || Math.hypot(p.x - NPC.x, p.z - NPC.z) > 4) toast('Acércate a Elara para comprar una poción.'); else send('interact', 'buy'); };
 }
 function journal(refresh = false) {

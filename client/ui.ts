@@ -4,6 +4,8 @@ export const icon = (name: string) => {
   const shapes: Record<string, string> = {
     star: '<path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5Z"/>',
     sword: '<path d="m14 3 7-1-1 7L8 21l-5-5Z M5 13l6 6 M2 22l4-4 M9 15l9-9"/>',
+    shield: '<path d="m12 2 8 3v7c0 5-8 10-8 10S4 17 4 12V5Z M12 6v11 M8 10h8"/>',
+    bow: '<path d="M5 3c18 0 18 18 0 18L5 3 M2 12h19 M17 8l4 4-4 4"/>',
     nova: '<path d="m12 2 2 6 6-2-3 6 5 3-7 1-3 6-2-6-7 1 4-5-5-3 7-1Z"/>',
     heal: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6Z"/>',
     potion: '<path d="M9 2h6 M10 2v6l-5 9a3 3 0 0 0 3 5h8a3 3 0 0 0 3-5l-5-9V2 M7 14h10"/>',
@@ -28,11 +30,13 @@ export function mountUI() {
     </header>
     <section id="welcome" class="welcome">
       <div class="welcome-content"><div class="eyebrow"><span></span> TU PRÓXIMA AVENTURA EMPIEZA AQUÍ</div>
-      <h1>El valle<br>te <em>espera.</em></h1>
-      <p class="intro">Un antiguo poder despierta entre los árboles.<br>Encuentra tu camino. Comparte la aventura.</p>
-      <form id="join-form"><label for="name">EL NOMBRE DE TU HISTORIA</label><input id="name" maxlength="18" minlength="2" required placeholder="Nombre de tu personaje" autocomplete="nickname" />
+      <h1>Elige tu <em>clase.</em></h1>
+      <p class="intro">Tres caminos. Una aventura compartida.<br>Tu clase define tus armas y habilidades.</p>
+      <form id="join-form"><fieldset class="class-fieldset"><legend>Elige tu clase</legend><div id="classes" class="classes-grid"></div></fieldset>
+      <div class="class-showcase"><div id="class-preview" role="img" aria-label="Vista previa 3D del personaje"></div><div id="class-detail" class="class-detail" aria-live="polite"></div></div>
+      <p id="class-persistence" class="class-note">Si ya tienes un personaje, se recuperarán su clase y su progreso al conectar.</p>
+      <label for="name">EL NOMBRE DE TU HISTORIA</label><input id="name" maxlength="18" minlength="2" required placeholder="Nombre de tu personaje" autocomplete="nickname" />
       <div class="character-choice"><span>Tu estandarte</span><div id="colors" role="group" aria-label="Color del personaje"></div><span id="class-label" class="class-label">Clase · Viajero</span></div>
-      <div id="classes" class="classes-grid" role="group" aria-label="Clase del personaje"></div>
       <button id="join" class="primary" type="submit">Entrar al valle ${icon('arrow')}</button><p id="join-error" class="error" role="alert"></p></form>
       <div class="welcome-meta"><span><i class="status-dot"></i><b id="lobby-count">0</b>/8 aventureros</span><span>3D · Cooperativo · Red local</span></div>
       <button id="import-access" class="subtle-link">Recuperar un personaje</button><input id="access-file" type="file" accept="application/json,.json" hidden />
