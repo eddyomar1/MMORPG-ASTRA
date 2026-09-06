@@ -9,7 +9,6 @@ import { TouchControls } from './touch-controls';
 import { defaults, parsePreferences, bindingError, bindingLabels, keyLabel, type Binding, type Preferences } from './preferences';
 import './style.css';
 import './responsive.css';
-import './classes.css';
 
 mountUI();
 $('class-preview').append($('world'));
