@@ -7,6 +7,7 @@ import { CharacterStore } from './database.js';
 import { GameWorld } from './world.js';
 import { CHARACTER_CLASSES, WORLD } from '../shared/content.js';
 import type { WorldState } from '../shared/schema.js';
+import { isBanner, type BannerId } from '../shared/banners.js';
 
 export async function createGameServer({ port = 3000, dbPath = 'data/astra.sqlite', dev = false, host = '0.0.0.0' } = {}) {
   const store = new CharacterStore(dbPath);
@@ -31,22 +32,27 @@ export async function createGameServer({ port = 3000, dbPath = 'data/astra.sqlit
       this.onMessage('interact', (c, m) => world.interact(c.sessionId, m));
       this.onMessage('equip', (c, m) => world.equip(c.sessionId, m));
       this.onMessage('chooseClass', (c, m) => world.chooseClass(c.sessionId, m));
+      this.onMessage('chooseBanner', (c, m) => world.chooseBanner(c.sessionId, m));
+      this.onMessage('switchClass', (c, m) => world.switchClass(c.sessionId, m));
+      this.onMessage('talk', (c, m) => world.talk(c.sessionId, m));
       this.onMessage('chat', (c, m) => world.chat(c.sessionId, m));
       this.onMessage('profile', c => c.send('profile', world.profiles.get(c.sessionId)));
       this.onMessage('ping', (c, m) => { if (typeof m === 'number' && Number.isFinite(m)) c.send('pong', m); });
     }
     onAuth(_client: Client, options: unknown) {
       if (!options || typeof options !== 'object') throw new Error('Datos de acceso inválidos.');
-      const { token, name, classType } = options as Record<string, unknown>;
+      const { token, name, classType, bannerId } = options as Record<string, unknown>;
+      if (bannerId != null && !isBanner(bannerId)) throw new Error('Estandarte inválido.');
       if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) throw new Error('Identidad inválida. Recarga el juego.');
       if (typeof name !== 'string' || !/^[\p{L}\p{N} _-]{2,18}$/u.test(name.trim())) throw new Error('Usa un nombre de 2–18 letras o números.');
       if (classType != null && (typeof classType !== 'string' || !Object.hasOwn(CHARACTER_CLASSES, classType))) throw new Error('Clase de personaje inválida.');
       return true;
     }
-    onJoin(client: Client, options: { token: string; name: string; color: string; classType?: keyof typeof CHARACTER_CLASSES }) {
-      world.add(client.sessionId, options.token, options.name.trim(), options.color, options.classType ?? 'knight');
+    onJoin(client: Client, options: { token: string; name: string; color?: string; bannerId?: BannerId; classType?: keyof typeof CHARACTER_CLASSES }) {
+      world.add(client.sessionId, options.token, options.name.trim(), options.color ?? '', options.classType ?? 'knight', options.bannerId);
     }
     async onDrop(client: Client) {
+      world.invalidateCombat(client.sessionId);
       const player = world.state.players.get(client.sessionId); if (player) { player.connected = false; player.moving = false; }
       try { await this.allowReconnection(client, 20); } catch { /* onLeave persists and removes the character. */ }
     }
@@ -75,7 +81,7 @@ export async function createGameServer({ port = 3000, dbPath = 'data/astra.sqlit
         res.set('Cache-Control', 'no-store');
         const token = req.body?.token;
         if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) { res.status(400).json({ error: 'Identidad inválida.' }); return; }
-        try { const p = store.load(token); res.json(p ? { name: p.name, classType: p.classType, classChoicePending: p.classChoicePending } : null); }
+        try { const p = store.load(token); res.json(p ? { name: p.name, classType: p.classType, classChoicePending: p.classChoicePending, bannerId: p.bannerId, bannerChoicePending: p.bannerChoicePending } : null); }
         catch (error) { res.status(409).json({ error: error instanceof Error ? error.message : 'No se pudo leer el personaje.' }); }
       });
       if (vite) app.use(vite.middlewares);

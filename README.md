@@ -1,6 +1,6 @@
 # Astra — Crónicas del valle
 
-RPG 3D cooperativo para navegador, con un mundo compartido para **1–8 jugadores** en una red local. Tu PC ejecuta el servidor y sirve todos los recursos del juego. Incluye una aventura inicial de tres capítulos; es la base jugable de un MMORPG, con capacidad local limitada a ocho personajes simultáneos.
+RPG 3D para navegador con cooperación contra criaturas y PvP entre estandartes, en un mundo compartido para **1–8 jugadores**. Tu PC ejecuta el servidor y sirve todos los recursos del juego por red local o mediante un túnel temporal de Internet. Incluye una aventura inicial de tres capítulos; es la base jugable de un MMORPG, limitada a ocho personajes simultáneos.
 
 ## Ejecutar desde cero
 
@@ -54,7 +54,7 @@ Comparte una dirección de tu red local:
   http://192.168.1.26:3000
 ```
 
-Abre **http://localhost:3000** en el navegador del PC servidor, escribe un nombre de personaje y pulsa **Entrar al valle**. Si ves el mundo y los controles, el arranque se completó.
+Abre **http://localhost:3000** en el navegador del PC servidor, escribe un nombre de personaje, elige clase y estandarte y pulsa **Entrar como caballero, mago o arquero**. Si ves el mundo y los controles, el arranque se completó.
 
 La terminal permanece ocupada mientras el servidor está funcionando; eso es normal. El juego debe abrirse desde esa dirección HTTP: abrir `index.html` directamente o mediante una extensión de servidor estático no ejecuta el servidor multijugador.
 
@@ -118,28 +118,38 @@ Para comprobar únicamente que el servidor responde, abre `http://localhost:3000
 | Shift | Correr |
 | Botón derecho + arrastrar | Girar cámara |
 | Rueda | Acercar / alejar |
-| Clic en enemigo / Tab | Seleccionar objetivo |
+| Clic en criatura o rival / Tab | Seleccionar objetivo; los aliados y protegidos no son atacables |
 | 1 / Espacio | Ataque básico; mantén Espacio para atacar repetidamente |
 | Q | Habilidad ofensiva de tu clase; recarga de 6–7 s |
 | F | Guardia, Barrera o Evasión, según tu clase |
 | R | Usar el consumible elegido en el inventario |
-| E | Hablar con Elara, entregar misión o recoger botín cercano |
+| E | Hablar con Elara, entregar misión, comerciar en tu casa o recoger botín cercano |
 | I / J / M | Inventario / diario / mapa |
 | Enter | Escribir y enviar chat |
 | C | Centrar cámara |
 | Escape | Cerrar ventana, salir del chat o quitar selección |
 
-Al entrar, camina hasta **Elara**, junto al cristal del santuario, y pulsa **E** para aceptar la primera misión. Sigue el camino al norte para encontrar criaturas. Recoge sus objetos con **E**. Regresa a Elara para entregar cada misión y pulsa **E** otra vez para aceptar la siguiente.
+Al entrar, busca a **Elara** en el mapa y pulsa **E** para aceptar la primera misión. Sigue el camino al norte para encontrar criaturas. Recoge sus objetos con **E**. Regresa a Elara para entregar cada misión y pulsa **E** otra vez para aceptar la siguiente.
 
-La aldea restaura la vida. Si mueres, reapareces en el santuario a los cinco segundos sin perder objetos. Los compañeros vivos que hayan participado recientemente y estén cerca de una baja reciben experiencia, oro y progreso de misión. El botín del suelo es compartido: lo recoge una sola persona. Cada participante del jefe recibe su propia arma avanzada de clase: filo astral, bastón del umbral o arco del umbral. Si una recompensa personal no cabe, Elara la guarda para que puedas reclamarla desde el inventario.
+La aldea restaura la vida y protege frente a todos los ataques. Si mueres, reapareces en el santuario a los cinco segundos sin perder objetos. Los jugadores vivos que hayan participado recientemente y estén cerca de la derrota de una criatura reciben experiencia, oro y progreso de misión, aunque sean de bandos distintos. Derrotar jugadores no concede recompensas. El botín del suelo es compartido: lo recoge una sola persona. Cada participante del jefe recibe su propia arma avanzada de clase: filo astral, bastón del umbral o arco del umbral. Si una recompensa personal no cabe, Elara la guarda para que puedas reclamarla desde el inventario estando junto a ella.
 
-El inventario tiene 24 casillas y ranuras de arma, armadura y accesorio. Selecciona un objeto para comparar bonificaciones, equiparlo o asignar un consumible al botón rápido. El equipo permanece en la mochila al equiparlo; las pociones y materiales se apilan hasta 99 unidades por casilla. Puedes desequipar y vender equipo con Elara para hacer espacio.
+El inventario tiene 24 casillas y ranuras de arma, armadura y accesorio. Selecciona un objeto para comparar bonificaciones, equiparlo o asignar un consumible al botón rápido. El equipo permanece en la mochila al equiparlo; las pociones y materiales se apilan hasta 99 unidades por casilla. Puedes desequipar y vender equipo en la casa de tu estandarte para hacer espacio.
 
-Estando junto a Elara, abre la tienda desde el inventario para comprar equipo y consumibles con oro. La poción básica cuesta 3 cristales o, si no tienes suficientes, 15 de oro; las armas avanzadas también se intercambian por 6 fragmentos. Las compras sin espacio no descuentan el pago. El sonido se activa con el botón del altavoz. En Ajustes puedes cambiar calidad, tamaño de interfaz y controles, sensibilidad, distribución para zurdos y atajos. Las preferencias se conservan en el navegador. Tab cambia de objetivo cuando el mundo tiene el foco; dentro de menús conserva la navegación normal.
+Acércate al puesto frente a **la casa de tu estandarte** y pulsa **Comerciar**, o abre la tienda desde el inventario. La poción básica cuesta 3 cristales o, si no tienes suficientes, 15 de oro; las armas avanzadas también se intercambian por 6 fragmentos. Cada operación exige estar a 3 unidades o menos de tu puesto: dejar la tienda abierta y alejarte impide comprar, vender o canjear. Las compras sin espacio no descuentan el pago. Elara mantiene las misiones y las entregas pendientes.
+
+Los avisos aparecen encima del tutorial, en el panel superior de consejos. Siguen apareciendo al cerrar el tutorial; con un menú abierto se muestran en su encabezado, separados de la vida. En Ajustes puedes cambiar calidad, tamaño de interfaz y controles, sensibilidad, distribución para zurdos y atajos. Las preferencias se conservan en el navegador. Tab cambia de objetivo cuando el mundo tiene el foco; dentro de menús conserva la navegación normal.
+
+### Estandartes y zona segura
+
+Elige **Brasa, Sol, Bosque, Ámbar u Hoja**. El traje y la casa comparten la identidad visual de su estandarte. Cada bando se identifica mediante un nombre y un emblema; Hoja sustituye al antiguo estandarte gris y conserva sus personajes y su casa. En el mapa, un borde claro destaca **Tu casa**; el inventario y el mapa muestran la distancia a su puesto. Todos los bandos ofrecen las mismas condiciones y precios; cada clase ve sus propios suministros.
+
+La clase y el estandarte se guardan con el personaje. Fuera de la aldea puedes seleccionar y atacar jugadores de otros estandartes; los del mismo son aliados y no reciben daño de tus ataques, incluso en área. El asistente de objetivo prioriza criaturas. No hay recompensas PvP ni cambios libres de bando.
+
+La aldea completa, incluyendo santuario, Elara, casas y accesos, es zona segura (`z >= 5`). La salida está marcada en el suelo y el mapa. Entrar en ella cancela los proyectiles pendientes que lanzaste o que te tenían como objetivo. Las explosiones filtran a cada afectado: no dañan aliados ni protegidos. Los consumibles y habilidades defensivas siguen disponibles. El indicador superior anuncia si estás en zona segura o en territorio de combate.
 
 ### Clases y objetos
 
-Elige una tarjeta en la pantalla de entrada para ver el personaje 3D y sus habilidades. En PC puedes recorrer las clases con las flechas del teclado. Un personaje nuevo conserva la clase elegida; al regresar, el selector muestra su clase guardada.
+Elige una tarjeta en la pantalla de entrada para ver el personaje 3D y sus habilidades. En PC puedes recorrer las clases con las flechas del teclado. Al regresar, el selector muestra la última clase activa. Puedes cambiar entre caballero, mago y arquero desde **Inventario → Clases de tu aventura**, estando junto al puesto de tu casa. Al abrir la casa también encontrarás este selector.
 
 | Clase | Vida inicial / alcance | Ataque | Q | F |
 | --- | --- | --- | --- | --- |
@@ -161,8 +171,8 @@ Abre la dirección LAN del PC en el navegador del teléfono. Puedes jugar en hor
 - **Ataque:** mantén el botón para repetir ataques. Puedes mover el joystick y atacar simultáneamente.
 - **Dos habilidades y consumible:** botones junto al ataque; cambian con tu clase y muestran el tiempo de recarga.
 - **Cámara:** arrastra una zona libre del mundo. Pellizca para acercar o alejar; los botones **+ / ◎ / −** permiten zoom y centrado sin gestos.
-- **Objetivo:** toca un enemigo o usa **Cambiar objetivo**. El desplazamiento al tocar terreno se activa opcionalmente en Ajustes.
-- **Hablar / recoger:** usa el botón contextual al acercarte a Elara o a un botín.
+- **Objetivo:** toca una criatura o un rival fuera de la aldea, o usa **Cambiar objetivo**. El desplazamiento al tocar terreno se activa opcionalmente en Ajustes.
+- **Hablar / comerciar / recoger:** usa el botón contextual al acercarte a Elara, al puesto de tu casa o a un botín.
 - **Menú:** inventario, misiones, mapa, ajustes, invitación y sonido. **Grupo** abre la lista de compañeros.
 - **Conversar:** abre el chat. El borrador se conserva si cierras el panel o pierdes la conexión.
 
@@ -170,23 +180,35 @@ Los controles se detienen al abrir un panel, escribir, girar la pantalla, oculta
 
 La calidad **Automática** ajusta el detalle tras medir el coste de renderizado. Baja y Ahorro limitan la imagen a un máximo aproximado de 30 FPS, reducen resolución y desactivan sombras/resplandor. Media y Alta permiten hasta la frecuencia del navegador. Ningún perfil garantiza ese rendimiento en cualquier dispositivo; el objetivo móvil debe comprobarse en teléfonos físicos. El tamaño del joystick se adapta al espacio disponible para evitar solapamientos al ampliar los botones.
 
+### Elara itinerante y afinidad de los objetos
+
+Elara camina despacio entre las cinco casas por rutas que evitan obstáculos. Su posición y animación se sincronizan para todos y su marcador del mapa se mueve con ella. Acércate y usa **Hablar con Elara** para abrir la conversación. Mientras el diálogo esté abierto y permanezcas cerca, Elara esperará. Usa **Despedirme** o cierra el diálogo para terminar. Si varias personas conversan con ella, espera a la última; después se detiene otros **3–10 segundos**, elegidos al azar, antes de reanudar el recorrido. Alejarse o desconectarse también termina la conversación.
+
+El botín de equipo se adapta a quien lo recoge: un arma del mismo grado será espada, bastón o arco según la clase activa; las armaduras serán coraza, túnica o cuero. Se conserva una sola recogida por objeto del suelo. Los consumibles, materiales y accesorios comunes sirven a todas las clases. La tienda solo permite adquirir equipo compatible con la clase activa. Los objetos antiguos ya guardados se conservan; las nuevas entregas pendientes se adaptan a la clase que las reclama.
+
+El progreso se vincula al acceso guardado en ese navegador, no a una identificación física del equipo. Otro navegador comienza con otro acceso; importar tu archivo de acceso recupera las tres clases del mismo personaje y continúa su progreso.
+
+Consulta los detalles de guardado y las comprobaciones en [Progreso por clase y Elara itinerante](docs/progreso-clases-elara.md).
+
 ## Contenido
 
 - Aldea segura, bosque y ruinas; escenario low-poly original generado con geometría local.
 - Cámara orbital en tercera persona; personajes y criaturas con animación procedural.
 - Caballero, Mago y Arquero con siluetas, armas y habilidades distintas; selector accesible con tarjetas y una única vista previa 3D.
 - Brotes silvestres, jabalíes, ecos y el Guardián del umbral.
-- Combate cooperativo, dos habilidades, pociones, muerte y reaparición.
-- Experiencia, niveles 1–5, oro, tablas de botín, 16 objetos, 24 casillas, armas, armaduras, accesorios y tienda de Elara.
+- Combate cooperativo y PvP entre cinco estandartes, dos habilidades, pociones, muerte y reaparición.
+- Experiencia, niveles 1–5, oro, tablas de botín, 16 objetos, 24 casillas, armas, armaduras, accesorios y cinco casas comerciales.
 - Tres misiones encadenadas y combate final de élite.
 - Chat local, grupo visible, minimapa, mapa completo y ayuda de controles.
 - Guardado SQLite, identificación privada, exportación/importación de acceso y reconexión breve.
 
 ## Guardados y personajes
 
-La base de datos se crea en **`data/astra.sqlite`** en el PC servidor. Guarda nombre, color, clase, nivel, experiencia, oro, inventario, equipo, consumible seleccionado, recompensas pendientes y progreso de misiones. Se actualiza al cambiar el progreso, periódicamente, al salir y al cerrar normalmente el servidor. Tras reiniciar, los personajes entran en la aldea con vida completa; enemigos, proyectiles, defensas temporales, botín del suelo y posiciones se recrean.
+La base de datos se crea en **`data/astra.sqlite`** en el PC servidor. Cada acceso del navegador dispone de tres progresiones independientes: una por clase. El nivel, experiencia, oro, misiones, equipo, inventario y recompensas de un mago no se copian a su arquero ni a su caballero. El nombre y estandarte identifican el mismo acceso. La primera vez que usas otra clase comienza en nivel 1, con su equipo inicial; volver a una clase recupera exactamente su progreso. Guarda nombre, estandarte, color canónico, clase, nivel, experiencia, oro, inventario, equipo, consumible seleccionado, recompensas pendientes y progreso de misiones. Se actualiza al cambiar el progreso, periódicamente, al salir y al cerrar normalmente el servidor. Tras reiniciar, los personajes entran en la aldea con vida completa; enemigos, proyectiles, defensas temporales, botín del suelo y posiciones se recrean.
 
-**Actualización desde las clases cosméticas:** detén el servidor con Ctrl+C y copia la carpeta `data/` completa antes de ejecutar la versión nueva. Los perfiles antiguos se migran a la versión 2 y ofrecen una elección gratuita de clase al conectar, conservando su progreso. Confirma la elección para habilitar el movimiento y el combate. Tus espadas permanecen en el inventario; si eliges mago o arquero, puedes intercambiar con Elara las espadas antiguas por armas equivalentes de tu clase. Las copias que excedan la capacidad quedan como recompensas pendientes. Una versión de perfil desconocida se rechaza sin sobrescribirla.
+**Actualización de personajes existentes:** detén el servidor con Ctrl+C y copia la carpeta `data/` completa antes de ejecutar la versión nueva. La actualización conserva el progreso previo en su clase; las clases adicionales se crean al usarlas por primera vez. Se añade una tabla de progresos por clase en la misma base de datos. Los perfiles anteriores a la **versión 3** mantienen su migración y la elección gratuita y única de estandarte al conectar. Confirma la elección si aparece para habilitar el juego; reiniciar o reconectar no permite cambiar de bando.
+
+Si vienes de las clases cosméticas (versión 1 o sin versión), primero confirmarás tu nueva clase y después el estandarte. Tus espadas permanecen en el inventario; si eliges mago o arquero, puedes canjear las espadas antiguas por armas equivalentes en **tu casa**. Las copias que excedan la capacidad quedan como recompensas pendientes con Elara. Una versión de perfil desconocida se rechaza sin sobrescribirla.
 
 El navegador conserva un token aleatorio de 256 bits. **El nombre no es una contraseña** y dos personas con el mismo nombre tienen personajes distintos. El token nunca se sincroniza con otros jugadores; la base de datos almacena su hash.
 
@@ -198,6 +220,20 @@ El navegador conserva un token aleatorio de 256 bits. **El nombre no es una cont
 - Para una copia de seguridad consistente, detén el servidor con Ctrl+C y copia la carpeta `data/` completa.
 
 ## Red local y configuración
+
+### Acceso por Internet con un túnel temporal
+
+Con el juego activo (`npm run play`), abre otra terminal en esta carpeta y ejecuta:
+
+```sh
+npm run tunnel
+```
+
+Comparte la dirección `https://…trycloudflare.com` que imprime Cloudflare. Mantén ambos procesos y el PC encendidos. `Ctrl+C` en la terminal del túnel cierra el acceso público; el servidor del juego se detiene por separado. El enlace cambia al crear otro túnel: exporta el acceso del personaje desde Ajustes para recuperarlo en el nuevo enlace.
+
+El comando utiliza `.local/bin/cloudflared`, una instalación disponible en `PATH`, o la ruta indicada por `CLOUDFLARED_PATH`. La carpeta `.local/` está excluida de Git: quien clone el repositorio debe instalar [cloudflared desde su fuente oficial](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/). No necesita cuenta ni dominio para un [Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/), destinado a pruebas y sin garantía de disponibilidad. El enlace permite entrar a cualquiera que lo conozca; los guardados permanecen en este PC.
+
+### Configuración de la LAN
 
 El servidor escucha en `0.0.0.0` y usa **un solo puerto TCP** para HTTP y WebSocket. El cliente obtiene la dirección WebSocket del mismo host que sirve la página.
 
@@ -252,6 +288,8 @@ Las pruebas cubren velocidad y colisiones, alcance y recargas, recogida simultá
 
 Las pruebas de clases y objetos verifican impactos diferidos y cancelación de proyectiles, explosiones, guardia, barrera, evasión, vendajes, restricciones de equipo, recargas compartidas, compras sin pérdida de pago, recompensas pendientes y migraciones repetibles. La campaña se comprueba con las tres clases. En el navegador se comprueban selección con teclado, vista previa única, tamaños de pantalla con interfaz al 150 %, recuperación de clase guardada y migración e intercambios desde una pantalla móvil.
 
+Las pruebas de estandartes cubren aliados y rivales con las tres clases, daño en área, ausencia de recompensas PvP, protección exacta del límite de la aldea, invalidación de proyectiles al cruzar o reconectar, migración a versión 3 y acceso a los cinco comercios. Las ocho conexiones incluyen los cinco bandos. En navegador se verifican selección de estandarte, objetivos rivales, comercio por casa, avisos independientes del tutorial y distribución de consejos al 150 %. Consulta el [registro de verificación](docs/verificacion-estandartes.md) para conocer las comprobaciones realizadas y las pendientes en dispositivos físicos.
+
 ## Organización
 
 ```text
@@ -260,6 +298,7 @@ server/app.ts       HTTP, Colyseus, sala única y conexiones
 server/world.ts     Simulación y reglas del juego
 server/database.ts Guardado SQLite
 shared/content.ts  Mapa, colisiones, criaturas, objetos y misiones
+shared/banners.ts  Estandartes, casas, zona segura y objetivos tipados
 shared/schema.ts   Estado sincronizado de Colyseus
 tests/              Pruebas de reglas, red y navegador
 ```

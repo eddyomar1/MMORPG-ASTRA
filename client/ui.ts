@@ -1,3 +1,4 @@
+import { enqueueNotice, observeNoticeLocation } from './notices';
 export const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 export const escapeHTML = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 export const icon = (name: string) => {
@@ -36,9 +37,10 @@ export function mountUI() {
       <div class="class-showcase"><div id="class-preview" role="img" aria-label="Vista previa 3D del personaje"></div><div id="class-detail" class="class-detail" aria-live="polite"></div></div>
       <p id="class-persistence" class="class-note">Si ya tienes un personaje, se recuperarán su clase y su progreso al conectar.</p>
       <label for="name">EL NOMBRE DE TU HISTORIA</label><input id="name" maxlength="18" minlength="2" required placeholder="Nombre de tu personaje" autocomplete="nickname" />
-      <div class="character-choice"><span>Tu estandarte</span><div id="colors" role="group" aria-label="Color del personaje"></div><span id="class-label" class="class-label">Clase · Viajero</span></div>
+      <fieldset class="character-choice banner-fieldset"><legend>Tu estandarte</legend><div id="colors" role="group" aria-label="Estandarte del personaje"></div><span id="class-label" class="class-label">Clase · Caballero</span><p>Tu traje y tu casa llevarán la identidad de tu estandarte. Fuera de la aldea, otros estandartes son rivales.</p></fieldset>
+      <div id="welcome-notice" class="notice-strip" role="status" aria-live="polite" hidden></div>
       <button id="join" class="primary" type="submit">Entrar al valle ${icon('arrow')}</button><p id="join-error" class="error" role="alert"></p></form>
-      <div class="welcome-meta"><span><i class="status-dot"></i><b id="lobby-count">0</b>/8 aventureros</span><span>3D · Cooperativo · Red local</span></div>
+      <div class="welcome-meta"><span><i class="status-dot"></i><b id="lobby-count">0</b>/8 aventureros</span><span>3D · Cooperación y PvP</span></div>
       <button id="import-access" class="subtle-link">Recuperar un personaje</button><input id="access-file" type="file" accept="application/json,.json" hidden />
       </div>
       <div class="location-caption"><span>01 — EL REFUGIO</span><strong>Aldea de Auralia</strong><p>Todo gran viaje comienza en un pequeño lugar.</p></div>
@@ -51,9 +53,10 @@ export function mountUI() {
       <button id="quest-brief" class="quest-brief panel" aria-label="Ver misión actual"><span>Tu siguiente paso</span><strong id="quest-next">Habla con Elara</strong></button>
       <section id="target" class="target panel" hidden><div><span id="target-kind">CRIATURA DEL VALLE</span><strong id="target-name"></strong></div><div class="health-track enemy-health"><i id="target-hp"></i><span id="target-value"></span></div></section>
       <aside class="right-hud"><button class="minimap panel" id="open-map" title="Abrir mapa (M)"><div class="map-title"><span id="zone">ALDEA DE AURALIA</span>${icon('compass')}</div><canvas id="minimap" width="220" height="170" aria-label="Minimapa del valle"></canvas><div class="map-footer"><span><i class="status-dot"></i><span id="zone-safety">Zona segura</span></span><kbd>M</kbd></div></button>
-      <section class="quest-card panel"><div class="section-label">${icon('book')} DIARIO DE VIAJE <button id="quest-open" class="tiny-button" aria-label="Abrir misiones">↗</button></div><h3 id="quest-title">Un nuevo comienzo</h3><p id="quest-summary">Elara te espera junto al santuario.</p><div id="quest-objectives"></div><div class="quest-reward" id="quest-reward"><span class="gold-dot">◇</span> Habla con Elara para comenzar</div></section>
+      <section class="quest-card panel"><div class="section-label">${icon('book')} DIARIO DE VIAJE <button id="quest-open" class="tiny-button" aria-label="Abrir misiones">↗</button></div><h3 id="quest-title">Un nuevo comienzo</h3><p id="quest-summary">Elara recorre las casas. Busca su señal en el mapa.</p><div id="quest-objectives"></div><div class="quest-reward" id="quest-reward"><span class="gold-dot">◇</span> Habla con Elara para comenzar</div></section>
       </aside>
-      <div id="tutorial" class="tutorial panel"><span class="tutorial-icon">${icon('compass')}</span><div><strong>Bienvenido a Auralia</strong><p id="tutorial-text"></p></div><button id="dismiss-tutorial" class="tiny-button" aria-label="Cerrar consejo">×</button></div>
+      <div id="tutorial" class="tutorial panel"><div id="notifications" class="notice-strip" role="status" aria-live="polite" hidden></div><div id="tutorial-advice"><strong>Bienvenido a Auralia</strong><p id="tutorial-text"></p><button id="dismiss-tutorial" class="tiny-button" aria-label="Cerrar consejo">×</button></div></div>
+      <div id="zone-banner" class="zone-banner">Aldea · Zona segura</div>
       <div id="interaction" class="interaction" hidden><button id="interact-button"><kbd>E</kbd><span id="interaction-text">Hablar con Elara</span></button></div>
       <button id="chat-toggle" class="hud-button chat-toggle" aria-expanded="false" aria-controls="chat-panel">Conversar <b id="unread" hidden>0</b></button><section id="chat-panel" class="chat panel" hidden><div class="chat-tabs"><span><i class="status-dot"></i> LOCAL</span><span id="online-count">1 aventurero</span><button id="chat-close" aria-label="Cerrar chat">×</button></div><div id="chat-log" class="chat-log" role="log" aria-live="polite"><p class="system">Bienvenido al valle. Tu historia comienza aquí.</p></div><form id="chat-form"><input id="chat-input" maxlength="180" placeholder="Escribe un mensaje…" autocomplete="off" aria-label="Mensaje al chat local"/><button type="submit" aria-label="Enviar mensaje">↵</button></form></section>
       <div id="movement-controls" class="movement-controls"><button id="run-toggle" class="hud-button" aria-pressed="false">Correr</button><div id="joystick" role="group" aria-label="Joystick de movimiento"><span class="joystick-ring"></span><span class="joystick-knob"></span><small>Mover</small></div></div>
@@ -68,9 +71,9 @@ export function mountUI() {
       <div class="connection-info"><i class="status-dot"></i><span id="connection">Conectado</span><span id="ping">— ms</span><span id="fps"></span></div>
       <div id="death" class="death" hidden><span>✧</span><h2>La luz te guía de vuelta</h2><p>Regresas al santuario en <b id="death-count">5</b> s</p></div>
     </div>
-    <div id="notifications" class="notifications" role="status" aria-live="polite"></div>
     <div id="connection-lost" class="connection-lost panel" hidden><span class="eyebrow">CONEXIÓN INTERRUMPIDA</span><h2>El valle sigue esperándote</h2><p id="reconnect-text">Intentando reconectar con el servidor…</p><button id="retry" class="primary">Volver a conectar ${icon('arrow')}</button></div>
-    <dialog id="modal" aria-labelledby="modal-title"><div class="modal-heading"><div><span class="eyebrow" id="modal-eyebrow">CRÓNICAS DEL VALLE</span><h2 id="modal-title"></h2></div><button id="modal-close" class="icon-button" aria-label="Cerrar ventana">×</button></div><div id="modal-live" class="modal-live" hidden><span>El mundo sigue activo</span><strong id="modal-health"></strong></div><div id="modal-body"></div></dialog>`;
+    <dialog id="modal" aria-labelledby="modal-title"><div class="modal-heading"><div><span class="eyebrow" id="modal-eyebrow">CRÓNICAS DEL VALLE</span><h2 id="modal-title"></h2></div><button id="modal-close" class="icon-button" aria-label="Cerrar ventana">×</button></div><div id="modal-live" class="modal-live" hidden><span>El mundo sigue activo</span><strong id="modal-health"></strong></div><div id="modal-notice" class="notice-strip" role="status" aria-live="polite" hidden></div><div id="modal-body"></div></dialog>`;
+  observeNoticeLocation();
   $('modal-close').onclick = () => ($('modal') as HTMLDialogElement).close();
   $('modal').addEventListener('click', e => { if (e.target === $('modal')) { const r = $('modal').getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) ($('modal') as HTMLDialogElement).close(); } });
 }
@@ -79,7 +82,5 @@ export function showModal(title: string, html: string, eyebrow = 'CRÓNICAS DEL 
   const dialog = $('modal') as HTMLDialogElement; if (!dialog.open) dialog.showModal();
 }
 export function toast(message: string) {
-  const node = document.createElement('div'); node.className = 'toast'; node.textContent = message; $('notifications').append(node);
-  if ($('notifications').childElementCount > 3) $('notifications').firstElementChild?.remove();
-  setTimeout(() => node.remove(), 4500);
+  enqueueNotice(message);
 }

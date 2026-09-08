@@ -1,29 +1,33 @@
 import { test, expect } from '@playwright/test';
+import { createGameServer } from '../../server/app';
 test('two browsers can enter, chat, accept a quest, open inventory and retain a character', async ({ browser, page }) => {
+  const game = await createGameServer({ port: 0, dbPath: ':memory:', host: '127.0.0.1' });
+  const url = `http://127.0.0.1:${(game.server.transport.server!.address() as { port: number }).port}`;
+  try {
   await page.addInitScript(() => localStorage.setItem('astra-low', 'yes'));
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
-  const external: string[] = []; page.on('request', r => { if (!r.url().startsWith('http://127.0.0.1:3100') && !r.url().startsWith('data:')) external.push(r.url()); });
-  await page.goto('/');
+  const external: string[] = []; page.on('request', r => { if (!r.url().startsWith(url) && !r.url().startsWith('data:')) external.push(r.url()); });
+  await page.goto(url);
   await expect(page.locator('#join')).toBeEnabled();
   await page.screenshot({ path: 'test-results/astra-welcome.png' });
   await page.locator('#name').fill('Exploradora'); await page.locator('#join').click();
   await expect(page.locator('#hud')).toBeVisible(); await expect(page.locator('#player-name')).toHaveText('Exploradora');
-  await expect(page.locator('#labels .world-label')).toHaveCount(13);
+  await expect(page.locator('#labels .world-label')).toHaveCount(18);
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
   const context = await browser.newContext({ viewport: { width: 960, height: 720 } }); const friend = await context.newPage();
   await friend.addInitScript(() => localStorage.setItem('astra-low', 'yes'));
   friend.on('pageerror', error => errors.push(error.message));
-  await friend.goto('/'); await friend.locator('#name').fill('Compañero'); await friend.locator('#join').click();
+  await friend.goto(url); await friend.locator('#name').fill('Compañero'); await friend.locator('#join').click();
   await expect(friend.locator('#hud')).toBeVisible(); await expect(page.locator('#online-count')).toHaveText('2 aventureros');
   await expect(page.locator('#party')).toContainText('Compañero'); await expect(friend.locator('#party')).toContainText('Exploradora');
   await page.locator('#chat-input').fill('¡Hola! Nos vemos en el santuario.'); await page.locator('#chat-input').press('Enter');
   await expect(friend.locator('#chat-log')).toContainText('¡Hola! Nos vemos en el santuario.');
   await context.close();
   await page.bringToFront();
-  await page.keyboard.down('KeyW'); await page.waitForTimeout(550); await page.keyboard.up('KeyW');
-  await page.keyboard.down('KeyD'); await page.waitForTimeout(450); await page.keyboard.up('KeyD');
+  const player = [...game.world.state.players.values()][0]; player.x = game.world.state.elara.x; player.z = game.world.state.elara.z;
   await expect(page.locator('#interaction')).toBeVisible(); await page.keyboard.press('KeyE');
   await expect(page.locator('#quest-objectives')).toContainText('0/3');
+  if (await page.locator('#elara-bye').isVisible()) await page.locator('#elara-bye').click();
   await page.locator('#inventory-button').click(); await expect(page.locator('#modal-title')).toHaveText('Tu inventario');
   await expect(page.locator('[data-item="potion"]')).toContainText('5');
   await page.locator('[data-item="potion"]').click(); await expect(page.locator('#item-detail')).toContainText('Recupera 65');
@@ -32,6 +36,7 @@ test('two browsers can enter, chat, accept a quest, open inventory and retain a 
   await page.locator('#settings').click(); await page.locator('#leave-game').click();
   await expect(page.locator('#welcome')).toBeVisible(); await page.locator('#join').click();
   await expect(page.locator('#quest-objectives')).toContainText('0/3');
-  await page.locator('#invite').click(); await expect(page.locator('.invite-url input').first()).toHaveValue(/http:\/\/.*:3100/);
+  await page.locator('#invite').click(); await expect(page.locator('.invite-url input').first()).toHaveValue(/http:\/\/.*:\d+/);
   expect(errors).toEqual([]); expect(external).toEqual([]);
+  } finally { await page.goto('about:blank'); await game.close(); }
 });

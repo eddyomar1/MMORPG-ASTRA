@@ -10,6 +10,7 @@
     "dev": "tsx server/index.ts --dev",
     "build": "tsc --noEmit && vite build && tsc -p tsconfig.server.json",
     "start": "node dist/server/server/index.js",
+    "tunnel": "node scripts/tunnel.mjs",
     "play": "npm run build && npm start",
     "check": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",

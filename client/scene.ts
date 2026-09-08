@@ -22,10 +22,12 @@ const MeshBuilder = { CreateBox, CreateCylinder, CreateSphere, CreateTorus };
 import { CHARACTER_CLASSES, COLORS, ENEMIES, ITEMS, NPC, OBSTACLES, WORLD, randomSeed, type CharacterClass, type EnemyKind, type ItemKind } from '../shared/content';
 type Actor = { root: TransformNode; limbs: TransformNode[]; sword?: TransformNode; costume?: TransformNode; label: HTMLDivElement; ring?: Mesh; appearance?: string; lastX: number; lastZ: number; };
 import type { WorldState } from '../shared/schema';
+import { BANNERS, HOUSES, SAFE_ZONE_Z, isBanner, isSafeZone, type TargetRef } from '../shared/banners';
 export class WorldView {
   engine: Engine; scene: Scene; camera: ArcRotateCamera;
-  state?: WorldState; selfId = ''; selected = ''; playing = false; suspended = false;
-  onSelect: (id: string) => void = () => {}; onGround: (x: number, z: number) => void = () => {};
+  state?: WorldState; selfId = ''; selected?: TargetRef; playing = false; suspended = false;
+  onSelect: (target?: TargetRef) => void = () => {}; onGround: (x: number, z: number) => void = () => {};
+  private houseLabels: Actor[] = [];
   private actors = new Map<string, Actor>(); private drops = new Map<string, TransformNode>();
   private preview?: Actor;
   private missiles = new Map<string, Mesh>();
@@ -68,16 +70,17 @@ export class WorldView {
       rotate: (x, y) => { this.camera.alpha -= x * .004 * this.sensitivity; this.camera.beta = Math.max(.3, Math.min(1.25, this.camera.beta - y * .004 * this.sensitivity)); },
       zoom: factor => this.zoom(factor),
       tap: (x, y, touch) => {
-        const hit = this.scene.pick(x, y, mesh => mesh.isPickable && (mesh.name === 'terrain' || !!mesh.metadata?.enemy));
-        if (hit?.pickedMesh?.metadata?.enemy) this.onSelect(hit.pickedMesh.metadata.enemy);
-        else if (hit?.pickedPoint && (!touch || this.tapToMove)) { this.onSelect(''); this.onGround(hit.pickedPoint.x, hit.pickedPoint.z); this.effect('move', hit.pickedPoint.x, hit.pickedPoint.z); }
+        const hit = this.scene.pick(x, y, mesh => mesh.isPickable && (mesh.name === 'terrain' || !!mesh.metadata?.enemy || !!mesh.metadata?.player));
+        if (hit?.pickedMesh?.metadata?.enemy) this.onSelect({ type: 'enemy', id: hit.pickedMesh.metadata.enemy });
+        else if (hit?.pickedMesh?.metadata?.player) this.onSelect({ type: 'player', id: hit.pickedMesh.metadata.player });
+        else if (hit?.pickedPoint && (!touch || this.tapToMove)) { this.onSelect(); this.onGround(hit.pickedPoint.x, hit.pickedPoint.z); this.effect('move', hit.pickedPoint.x, hit.pickedPoint.z); }
       },
     });
     window.addEventListener('resize', () => this.engine.resize());
     // Labels use the camera matrix of the frame that has just been rendered.
     this.scene.onAfterRenderObservable.add(() => {
       const occupied: { x: number; y: number }[] = [];
-      const selected = this.actors.get(this.selected), self = this.actors.get(this.selfId);
+      const selected = this.selected && this.actors.get(this.selected.id), self = this.actors.get(this.selfId);
       const priority = (actor: Actor) => actor === selected ? 0 : actor === this.npc ? 1 : actor === self ? 2 : 3;
       [...this.labelQueue].sort(([a], [b]) => priority(a) - priority(b)).forEach(([actor, { y, show }]) => {
         const p = actor.root.position, screen = this.project(p.x, p.y + y, p.z);
@@ -157,6 +160,7 @@ export class WorldView {
       const stone = this.cylinder('path', 1.45 + rand() * 0.3, 1.4, 0.08, 6, ['#b5b4a0', '#c3bcaa', '#a9ad96'][Math.floor(rand() * 3)], j * 1.55 + (rand() - 0.5) * 0.25, 0.025, z + (j % 2) * 0.4); stone.rotation.y = rand();
     }
     this.cylinder('plaza', 14, 14, 0.06, 12, '#bebba6', 0, 0.02, 14);
+    for (let x = -5; x <= 5; x++) this.box('safe-zone-boundary', .65, .05, .24, '#eed38f', x, .08, SAFE_ZONE_Z);
     for (const o of OBSTACLES) {
       if (o.kind === 'tree') {
         const h = 3.5 + rand() * 3, scale = o.radius / 0.8;
@@ -205,11 +209,19 @@ export class WorldView {
     }
   }
   private house(x: number, z: number, variant: number) {
+    const house = HOUSES[variant], banner = BANNERS[house.bannerId];
     this.box('foundation', 6.6, 0.4, 5.8, '#9b9c88', x, 0.2, z);
     this.box('plaster walls', 6, 3.8, 5.2, '#d4c5a2', x, 2.2, z);
     for (const dx of [-2.9, 0, 2.9]) this.box('timber', 0.22, 3.9, 5.35, '#75604b', x + dx, 2.2, z);
     this.box('beam', 6.2, 0.2, 5.4, '#75604b', x, 3.5, z);
-    const roof = this.cylinder('roof', 10.2, 0, 3.6, 4, ['#ac6952', '#567e76', '#b1855d'][variant], x, 5.7, z); roof.rotation.y = Math.PI / 4; roof.scaling.z = 0.9;
+    const roof = this.cylinder('roof', 10.2, 0, 3.6, 4, banner.color, x, 5.7, z); roof.rotation.y = Math.PI / 4; roof.scaling.z = 0.9;
+    this.cylinder('banner-pole', .09, .09, 2.8, 6, '#dfcf9b', x + 2, 2, z + 3);
+    this.box('house-banner', .9, .7, .06, banner.color, x + 1.55, 3, z + 3);
+    this.box('shop-counter', 1.4, .75, .55, '#88674b', house.shop.x, .38, house.shop.z - .5);
+    this.box('shop-cloth', 1.45, .07, .6, banner.color, house.shop.x, .8, house.shop.z - .5);
+    const root = new TransformNode(house.id, this.scene); root.position.set(house.x, 0, house.z);
+    const label = this.label(); label.classList.add('house-label'); label.style.setProperty('--house-color', banner.color); label.innerHTML = `<strong>${banner.emblem} Casa ${banner.name}</strong><small>Comercio</small>`;
+    this.houseLabels.push({ root, label, limbs: [], lastX: x, lastZ: z });
     this.box('chimney', 0.8, 2.5, 0.9, '#a6a58f', x + 1.8, 6, z - 0.6);
     this.box('door', 1.2, 2.2, 0.1, '#635846', x, 1.5, z + 2.66);
     for (const dx of [-1.8, 1.8]) {
@@ -287,7 +299,8 @@ export class WorldView {
     return { primary: def.color, accent: def.accent, trim: def.accent };
   }
   private recolorActor(actor: Actor, classType: string, banner: string, weapon = 'starter', armor = '', accessory = '') {
-    const { primary, accent, trim } = this.classPalette(classType);
+    const palette = this.classPalette(classType);
+    const primary = COLORS.includes(banner) ? banner : palette.primary, accent = '#e8dcc0', trim = '#d9c89f';
     if (actor.ring) actor.ring.scaling.setAll(1.05 + Math.sin(this.time * 2.2) * 0.04);
     const appearance = `${classType}:${banner}:${weapon}:${armor}:${accessory}`;
     if (actor.appearance === appearance) return;
@@ -314,7 +327,7 @@ export class WorldView {
       this.box('guard', .42, .1, .12, accent, 0, 0, .14, actor.sword);
       this.sphere('helmet', .68, '#a8b8b2', 0, 2.05, -.08, costume);
       this.box('helmet-crest', .1, .3, .5, primary, 0, 2.4, -.07, costume);
-      this.box('breastplate', .81, .7, .53, '#a8b8b2', 0, 1.22, .03, costume);
+      this.box('breastplate', .81, .7, .53, primary, 0, 1.22, .03, costume);
       const shield = this.cylinder('shield', .8, .8, .13, 6, primary, -.65, 1.1, .33, costume); shield.rotation.x = Math.PI / 2;
       this.box('shield-mark', .1, .4, .03, accent, -.65, 1.1, .42, costume);
     }
@@ -322,6 +335,7 @@ export class WorldView {
     if (accessory) { const jewel = this.sphere('amulet', .17, ITEMS[accessory as ItemKind]?.color ?? accent, 0, 1.48, .34, costume); jewel.material = this.mat(accent, true); }
     if (actor.ring) actor.ring.material = this.mat(COLORS.includes(banner) ? banner : primary, true);
     actor.root.getChildMeshes().forEach(mesh => {
+      if (actor.root.name !== 'npc' && actor.root.name !== 'class-preview' && mesh !== actor.ring) { mesh.isPickable = true; mesh.metadata = { player: actor.root.name }; }
       if (!(mesh.material instanceof StandardMaterial)) return;
       const name = mesh.name.toLowerCase();
       // Assign cached materials instead of mutating materials shared with NPCs.
@@ -345,7 +359,7 @@ export class WorldView {
     this.fountain.rotation.y = t * 0.4; this.fountain.position.y = 2.6 + Math.sin(t * 1.5) * 0.15;
     this.particles.forEach(p => { p.mesh.position.y += Math.sin(t + p.phase) * dt * 0.12; });
     this.effects = this.effects.filter(e => { e.age += dt; const s = e.kind === 'nova' ? 1 + e.age * 15 : e.kind === 'slam' ? 1 + e.age * 12 : 1 + e.age * 3; e.mesh.scaling.setAll(s); e.mesh.visibility = Math.max(0, 1 - e.age * 1.5); if (e.age > 0.7) { e.mesh.dispose(); return false; } return true; });
-    if (!this.playing) { if (this.preview && !this.reducedMotion) this.preview.root.rotation.y += dt * .22; this.positionLabel(this.npc, 2.8, false); return; }
+    if (!this.playing) { if (this.preview && !this.reducedMotion) this.preview.root.rotation.y += dt * .22; this.positionLabel(this.npc, 2.8, false); this.houseLabels.forEach(a => this.positionLabel(a, 2.5, false)); return; }
     if (this.preview) { this.preview.root.getChildMeshes().forEach(mesh => this.shadows.removeShadowCaster(mesh)); this.preview.root.dispose(); this.preview = undefined; }
     const live = new Set<string>();
     this.state?.players.forEach((p, id) => {
@@ -354,7 +368,9 @@ export class WorldView {
       const classInfo = CHARACTER_CLASSES[(p.classType || 'knight') as CharacterClass] ?? CHARACTER_CLASSES.knight;
       const nameLabel = a.label.querySelector('strong')!, classLabel = a.label.querySelector('small')!;
       if (nameLabel.textContent !== p.name) nameLabel.textContent = p.name;
-      if (classLabel.textContent !== classInfo.name) classLabel.textContent = classInfo.name;
+      const banner = BANNERS[isBanner(p.bannerId) ? p.bannerId : 'crimson'];
+      const subtitle = `${classInfo.name} · ${banner.emblem} ${banner.name} · ${id === this.selfId ? 'Tú' : p.bannerId === me?.bannerId ? 'Aliado' : 'Rival'}`;
+      if (classLabel.textContent !== subtitle) classLabel.textContent = subtitle;
       const pos = a.root.position, snap = Math.hypot(pos.x - p.x, pos.z - p.z) > 8;
       pos.x += (p.x - pos.x) * (snap ? 1 : Math.min(1, dt * 18)); pos.z += (p.z - pos.z) * (snap ? 1 : Math.min(1, dt * 18));
       const angle = Math.atan2(Math.sin(p.yaw - a.root.rotation.y), Math.cos(p.yaw - a.root.rotation.y)); a.root.rotation.y += angle * Math.min(1, dt * 14);
@@ -403,10 +419,22 @@ export class WorldView {
       }
       mesh.position.set(shot.x, 1.2, shot.z); mesh.rotation.y = Math.atan2(shot.x - shot.startX, shot.z - shot.startZ);
     });
-    const selected = this.state?.enemies.get(this.selected);
+    const selected = this.selected?.type === 'player' ? this.state?.players.get(this.selected.id) : this.selected ? this.state?.enemies.get(this.selected.id) : undefined;
     this.selection.setEnabled(!!selected && selected.hp > 0);
-    if (selected) { this.selection.position.set(selected.x, 0.14, selected.z); this.selection.scaling.setAll(selected.kind === 'warden' ? 1.9 : 1); }
-    this.positionLabel(this.npc, 2.8, !!me && Math.hypot(me.x - NPC.x, me.z - NPC.z) < 24);
+    if (selected) { this.selection.position.set(selected.x, 0.14, selected.z); this.selection.scaling.setAll('kind' in selected && selected.kind === 'warden' ? 1.9 : 1); }
+    this.houseLabels.forEach((a, i) => {
+      const own = HOUSES[i].bannerId === me?.bannerId;
+      a.label.querySelector('small')!.textContent = own ? 'Tu casa · Compra y venta' : 'Comercio de otro estandarte';
+      this.positionLabel(a, 8.2, !!me && Math.hypot(me.x - a.root.position.x, me.z - a.root.position.z) < 22);
+    });
+    const elara = this.state?.elara;
+    if (elara) {
+      this.npc.root.position.x += (elara.x - this.npc.root.position.x) * Math.min(1, dt * 18);
+      this.npc.root.position.z += (elara.z - this.npc.root.position.z) * Math.min(1, dt * 18);
+      this.npc.root.rotation.y = elara.yaw;
+      this.npc.limbs.forEach((limb, i) => limb.rotation.x = elara.moving ? Math.sin(t * 4) * .4 * (i < 2 ? 1 : -1) * (i % 2 ? -1 : 1) : 0);
+    }
+    this.positionLabel(this.npc, 2.8, !!me && !!elara && Math.hypot(me.x - elara.x, me.z - elara.z) < 24);
     this.camera.setTarget(Vector3.Lerp(this.camera.target, this.target, this.reducedMotion ? 1 : Math.min(1, dt * 7)), false, true, true);
   }
   zoom(factor: number) { this.camera.radius = Math.max(11, Math.min(this.playing ? 36 : 45, this.camera.radius * factor)); }

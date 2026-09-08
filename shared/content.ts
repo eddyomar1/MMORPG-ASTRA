@@ -1,6 +1,7 @@
+import { BANNERS, BANNER_IDS, HOUSES, bannerFromColor, isBanner, type BannerId } from './banners.js';
 export const WORLD = { minX: -36, maxX: 36, minZ: -43, maxZ: 32, spawnX: 0, spawnZ: 17, speed: 5, runSpeed: 7.5, maxPlayers: 8 };
 export const NPC = { x: -4, z: 13, name: 'Elara', title: 'Guardiana del valle' };
-export const COLORS = ['#64b8ab', '#cf8d60', '#9595d4', '#c7b873'];
+export const COLORS: string[] = BANNER_IDS.map(id => BANNERS[id].color);
 export type EnemyKind = 'slime' | 'boar' | 'wisp' | 'warden';
 export type CharacterClass = 'knight' | 'mage' | 'archer';
 export type ActionKind = 'attack' | 'nova' | 'heal' | 'potion';
@@ -29,7 +30,7 @@ export type ItemCategory = EquipmentSlot | 'consumable' | 'material';
 export interface ItemDefinition { name: string; description: string; icon: string; color: string; category: ItemCategory; rarity: 'Común' | 'Inusual' | 'Raro'; stack: number; price: number; classType?: CharacterClass; damage?: number; health?: number; defense?: number; heal?: number; fragments?: number }
 export const ITEMS: Record<ItemKind, ItemDefinition> = {
   potion: { name: 'Poción de vida', description: 'Recupera 65 de vida. Comparte recarga con las otras pociones.', icon: '✚', color: '#dc8d82', category: 'consumable', rarity: 'Común', stack: 99, price: 15, heal: 65 },
-  crystal: { name: 'Cristal del valle', description: 'Intercambia 3 cristales por una poción con Elara.', icon: '◇', color: '#79d4c3', category: 'material', rarity: 'Común', stack: 99, price: 8 },
+  crystal: { name: 'Cristal del valle', description: 'Intercambia 3 cristales por una poción en la casa de tu estandarte.', icon: '◇', color: '#79d4c3', category: 'material', rarity: 'Común', stack: 99, price: 8 },
   iron: { name: 'Espada de hierro', description: 'Una hoja robusta. +7 de daño.', icon: '⚔', color: '#c0cad1', category: 'weapon', rarity: 'Inusual', stack: 1, price: 50, classType: 'knight', damage: 7 },
   astral: { name: 'Filo astral', description: 'El legado del guardián. +16 de daño.', icon: '✧', color: '#d6b570', category: 'weapon', rarity: 'Raro', stack: 1, price: 180, fragments: 6, classType: 'knight', damage: 16 },
   oakStaff: { name: 'Bastón de roble', description: 'Canaliza la energía del bosque. +7 de daño.', icon: '⚚', color: '#b7a0e0', category: 'weapon', rarity: 'Inusual', stack: 1, price: 50, classType: 'mage', damage: 7 },
@@ -43,10 +44,17 @@ export const ITEMS: Record<ItemKind, ItemDefinition> = {
   powerRing: { name: 'Anillo de poder', description: '+4 de daño. Ocupa la misma ranura que el amuleto.', icon: '◉', color: '#d6b570', category: 'accessory', rarity: 'Inusual', stack: 1, price: 55, damage: 4 },
   greaterPotion: { name: 'Poción de vida mayor', description: 'Recupera 110 de vida. Comparte recarga con la poción de vida.', icon: '✚', color: '#eaa0a8', category: 'consumable', rarity: 'Inusual', stack: 99, price: 30, heal: 110 },
   bandage: { name: 'Vendaje', description: 'Recupera 50 de vida en 5 segundos. Requiere 5 segundos fuera de combate y se interrumpe al combatir.', icon: '▤', color: '#ded8bd', category: 'consumable', rarity: 'Común', stack: 99, price: 10, heal: 50 },
-  fragment: { name: 'Fragmento del umbral', description: 'Intercambia 6 fragmentos por un arma avanzada con Elara.', icon: '◆', color: '#c8aff0', category: 'material', rarity: 'Raro', stack: 99, price: 35 },
+  fragment: { name: 'Fragmento del umbral', description: 'Intercambia 6 fragmentos por un arma avanzada en la casa de tu estandarte.', icon: '◆', color: '#c8aff0', category: 'material', rarity: 'Raro', stack: 99, price: 35 },
 };
 export const INVENTORY_CAPACITY = 24;
 export const CLASS_WEAPONS: Record<CharacterClass, [ItemKind, ItemKind]> = { knight: ['iron', 'astral'], mage: ['oakStaff', 'astralStaff'], archer: ['hunterBow', 'astralBow'] };
+export function itemForClass(kind: ItemKind, classType: CharacterClass): ItemKind {
+  const item = ITEMS[kind];
+  if (!item.classType || item.classType === classType) return kind;
+  if (item.category === 'weapon') return CLASS_WEAPONS[classType][item.fragments ? 1 : 0];
+  if (item.category === 'armor') return ({ knight: 'plate', mage: 'robe', archer: 'leather' } as const)[classType];
+  return kind;
+}
 export const LOOT_TABLES: Record<EnemyKind, { kind: ItemKind; weight: number }[]> = {
   slime: [{ kind: 'crystal', weight: 60 }, { kind: 'potion', weight: 25 }, { kind: 'bandage', weight: 15 }],
   boar: [{ kind: 'iron', weight: 15 }, { kind: 'oakStaff', weight: 15 }, { kind: 'hunterBow', weight: 15 }, { kind: 'plate', weight: 10 }, { kind: 'robe', weight: 10 }, { kind: 'leather', weight: 10 }, { kind: 'crystal', weight: 25 }],
@@ -68,14 +76,14 @@ export const xpForLevel = (level: number) => level * 90;
 export const maxHealth = (level: number, classType: CharacterClass = 'knight') => CHARACTER_CLASSES[classType].health + (level - 1) * 25;
 export interface ItemStack { kind: ItemKind; count: number }
 export interface Profile {
-  name: string; color: string; classType: CharacterClass; level: number; xp: number; gold: number;
+  name: string; color: string; bannerId: BannerId; bannerChoicePending: boolean; classType: CharacterClass; level: number; xp: number; gold: number;
   version: number; classChoicePending: boolean; legacyExchange: boolean; legacyWeapons: Partial<Record<'iron' | 'astral', number>>;
   inventory: ItemStack[]; weapon: 'starter' | ItemKind; armor: ItemKind | ''; accessory: ItemKind | ''; consumable: ItemKind; pendingRewards: ItemStack[];
   quest: number; questAccepted: boolean; kills: Record<EnemyKind, number>;
   cooldowns: Record<string, number>;
 }
 export const emptyKills = (): Record<EnemyKind, number> => ({ slime: 0, boar: 0, wisp: 0, warden: 0 });
-export const newProfile = (name: string, color: string, classType: CharacterClass = 'knight'): Profile => ({ version: 2, classChoicePending: false, legacyExchange: false, legacyWeapons: {}, name, color, classType, level: 1, xp: 0, gold: 0, inventory: [{ kind: 'potion', count: 5 }], weapon: 'starter', armor: '', accessory: '', consumable: 'potion', pendingRewards: [], quest: 0, questAccepted: false, kills: emptyKills(), cooldowns: {} });
+export const newProfile = (name: string, color: string, classType: CharacterClass = 'knight', bannerId: BannerId = bannerFromColor(color)): Profile => ({ version: 3, bannerId, bannerChoicePending: false, classChoicePending: false, legacyExchange: false, legacyWeapons: {}, name, color: BANNERS[bannerId].color, classType, level: 1, xp: 0, gold: 0, inventory: [{ kind: 'potion', count: 5 }], weapon: 'starter', armor: '', accessory: '', consumable: 'potion', pendingRewards: [], quest: 0, questAccepted: false, kills: emptyKills(), cooldowns: {} });
 export function equipmentStats(p: Profile) {
   const result = { damage: 0, health: maxHealth(p.level, p.classType), defense: 0 };
   for (const slot of ['weapon', 'armor', 'accessory'] as const) {
@@ -88,6 +96,15 @@ export function equipmentStats(p: Profile) {
 }
 /** Normalize old cosmetic characters without choosing their permanent class for them. */
 export function migrateProfile(raw: Record<string, any>): Profile {
+  if (raw.version === 3) {
+    if (!isBanner(raw.bannerId)) throw new Error('Estandarte guardado inválido; se conserva el personaje original.');
+    return { ...raw, color: BANNERS[raw.bannerId].color } as Profile;
+  }
+  const p = migrateClasses(raw);
+  const bannerId = bannerFromColor(p.color);
+  return { ...p, version: 3, bannerId, color: BANNERS[bannerId].color, bannerChoicePending: true };
+}
+function migrateClasses(raw: Record<string, any>): Profile {
   if (raw.version != null && raw.version !== 1 && raw.version !== 2) throw new Error('Versión de personaje no compatible. Actualiza el servidor sin sobrescribir el guardado.');
   if (raw.version === 2) return raw as Profile;
   const classType: CharacterClass = raw.classType === 'mage' ? 'mage' : 'knight';
@@ -107,15 +124,12 @@ export interface Obstacle { x: number; z: number; radius: number; kind: 'tree' |
 export function randomSeed(seed: number) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
 const rand = randomSeed(7304);
 export const OBSTACLES: Obstacle[] = [
-  { x: -12, z: 18, radius: 3.5, kind: 'house', variant: 0 },
-  { x: 12, z: 14, radius: 3.5, kind: 'house', variant: 1 },
-  { x: -14, z: 7, radius: 3, kind: 'house', variant: 2 },
-  { x: 12, z: 26, radius: 3.2, kind: 'house', variant: 0 },
+  ...HOUSES.map((h, variant) => ({ x: h.x, z: h.z, radius: h.radius, kind: 'house' as const, variant })),
   ...[-8, 8].flatMap(x => [-28, -36].map(z => ({ x, z, radius: 1, kind: 'pillar' as const, variant: 0 }))),
 ];
 for (let i = 0; i < 135; i++) {
   const x = (rand() - 0.5) * 68, z = rand() * 68 - 41;
-  if (Math.abs(x) < 6 || (z < -26 && Math.abs(x) < 12) || OBSTACLES.some(o => Math.hypot(o.x - x, o.z - z) < o.radius + 2.5)) continue;
+  if (Math.abs(x) < 6 || (z < -26 && Math.abs(x) < 12) || HOUSES.some(h => Math.abs(z - h.shop.z) < 1.8 && Math.abs(x) <= Math.abs(h.x) + 2) || OBSTACLES.some(o => Math.hypot(o.x - x, o.z - z) < o.radius + 2.5)) continue;
   OBSTACLES.push({ x, z, radius: 0.65 + rand() * 0.3, kind: rand() > 0.15 ? 'tree' : 'rock', variant: Math.floor(rand() * 3) });
 }
 export function canStand(x: number, z: number, radius = 0.45): boolean {

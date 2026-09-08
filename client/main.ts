@@ -10,6 +10,9 @@ import { defaults, parsePreferences, bindingError, bindingLabels, keyLabel, type
 import './style.css';
 import './responsive.css';
 import './classes.css';
+import './banners.css';
+import { BANNERS, BANNER_IDS, HOUSES, SAFE_ZONE_Z, SHOP_RADIUS, bannerFromColor, houseFor, isBanner, isSafeZone, sameTarget, type BannerId, type TargetRef } from '../shared/banners';
+import { setTutorialVisible } from './notices';
 
 mountUI();
 $('class-preview').append($('world'));
@@ -36,10 +39,22 @@ let token = read('astra-token');
 if (!token || !/^[a-f0-9]{64}$/.test(token)) { token = [...crypto.getRandomValues(new Uint8Array(32))].map(n => n.toString(16).padStart(2, '0')).join(''); save('astra-token', token); }
 const savedClass = read('astra-class') as CharacterClass | null;
 let selectedClass: CharacterClass = savedClass && Object.hasOwn(CHARACTER_CLASSES, savedClass) ? savedClass : 'knight';
-let savedCharacter: { name: string; classType: CharacterClass; classChoicePending: boolean } | null = null;
+let savedCharacter: { name: string; classType: CharacterClass; classChoicePending: boolean; bannerId: BannerId; bannerChoicePending: boolean } | null = null;
 $<HTMLInputElement>('name').value = read('astra-name') || '';
 color = COLORS.includes(read('astra-color') || '') ? read('astra-color')! : COLORS[0];
-function colors() { $('colors').innerHTML = COLORS.map((c, i) => `<button type="button" aria-label="Estandarte ${['jade', 'ámbar', 'amatista', 'oro'][i]}" aria-pressed="${c === color}" data-color="${c}" class="color-choice ${c === color ? 'selected' : ''}" style="--swatch:${c}"></button>`).join(''); $('colors').querySelectorAll<HTMLButtonElement>('button').forEach(b => b.onclick = () => { color = b.dataset.color!; colors(); updateClassLabel(); }); }
+let selectedBanner = isBanner(read('astra-banner')) ? read('astra-banner') as BannerId : bannerFromColor(color);
+function bannerChoices(group: string, selected = selectedBanner) {
+  return BANNER_IDS.map(id => `<label class="banner-choice" style="--swatch:${BANNERS[id].color}"><input type="radio" name="${group}" value="${id}" ${id === selected ? 'checked' : ''}><span class="banner-swatch">${BANNERS[id].emblem}</span><span>${BANNERS[id].name}</span><b class="banner-check">✓</b></label>`).join('');
+}
+function colors() {
+  if (!$('colors').childElementCount) {
+    $('colors').innerHTML = bannerChoices('banner');
+    $('colors').addEventListener('change', e => { selectedBanner = (e.target as HTMLInputElement).value as BannerId; save('astra-banner', selectedBanner); colors(); updateClassLabel(); });
+  }
+  color = BANNERS[selectedBanner].color;
+  $('colors').querySelectorAll<HTMLInputElement>('input').forEach(r => { r.checked = r.value === selectedBanner; r.disabled = !!savedCharacter && !savedCharacter.bannerChoicePending; });
+}
+const statTiles = (values: [string, string | number, string?][]) => `<div class="stat-grid">${values.map(([label, value, detail]) => `<div><span>${label}</span><strong>${value}</strong>${detail ? `<small>${detail}</small>` : ''}</div>`).join('')}</div>`;
 function updateClassLabel() {
   const info = CHARACTER_CLASSES[selectedClass];
   $('class-label').textContent = info.label;
@@ -49,8 +64,8 @@ function updateClassLabel() {
     $('classes').addEventListener('change', e => { selectedClass = (e.target as HTMLInputElement).value as CharacterClass; save('astra-class', selectedClass); updateClassLabel(); });
   }
   $('classes').querySelectorAll<HTMLInputElement>('input').forEach(radio => { radio.checked = radio.value === selectedClass; radio.disabled = !!savedCharacter && !savedCharacter.classChoicePending; });
-  $('class-detail').innerHTML = `<h2>${info.name}</h2><p>${info.description}</p><div class="class-stats"><span>${info.health} de vida</span><span>Alcance ${info.range}</span><span>Dificultad ${info.difficulty.toLowerCase()}</span></div><ul>${Object.values(info.abilities).map(a => `<li><b>${a.name}</b>: ${a.description} (${a.cooldown} s)</li>`).join('')}</ul>`;
-  $('class-preview').setAttribute('aria-label', `Vista previa 3D: ${info.name}`);
+  $('class-detail').innerHTML = `<h2>${info.name}</h2><p>${info.description}</p>${statTiles([['Vida', info.health], ['Daño básico', info.abilities.attack.damage], ['Alcance', info.range, 'unidades'], ['Recarga', `${info.abilities.attack.cooldown} s`]])}<p>Dificultad ${info.difficulty.toLowerCase()} · ${info.role}</p><ul>${Object.values(info.abilities).map(a => `<li><b>${a.name}</b>: ${a.description} (recarga ${a.cooldown} s)</li>`).join('')}</ul>`;
+  $('class-preview').setAttribute('aria-label', `Vista previa 3D: ${info.name}, estandarte ${BANNERS[selectedBanner].name}`);
   if (!joining) $('join').innerHTML = `Entrar como ${info.name.toLowerCase()} ${icon('arrow')}`;
   if (!view.playing) view.previewClass(selectedClass, color);
 }
@@ -64,8 +79,10 @@ async function loadCharacter() {
   if (!response.ok) throw new Error(data.error || 'No se pudo recuperar el personaje.');
   savedCharacter = data;
   if (savedCharacter) {
+    if (!savedCharacter.bannerChoicePending) selectedBanner = savedCharacter.bannerId;
+    colors();
     if (!savedCharacter.classChoicePending) { selectedClass = savedCharacter.classType; $<HTMLInputElement>('name').value = savedCharacter.name; }
-    $('class-persistence').textContent = savedCharacter.classChoicePending ? 'Tu personaje conserva todo su progreso. Al conectar podrás confirmar tu nueva clase gratuitamente.' : `Continuarás la historia de ${savedCharacter.name}, ${CHARACTER_CLASSES[savedCharacter.classType].name.toLowerCase()}. Su clase ya está elegida.`;
+    $('class-persistence').textContent = savedCharacter.classChoicePending ? 'Tu personaje conserva todo su progreso. Al conectar podrás confirmar tu nueva clase gratuitamente.' : `Continuarás la historia de ${savedCharacter.name}, ${CHARACTER_CLASSES[savedCharacter.classType].name.toLowerCase()}. Puedes cambiar de clase en tu casa; cada clase conserva su propio progreso.`;
     updateClassLabel();
   }
 }
@@ -85,7 +102,7 @@ async function join() {
   try {
     await loadCharacter();
     await loadServerInfo();
-    const next = await client.joinById<WorldState>(serverInfo.roomId, { token, name, color, classType: selectedClass });
+    const next = await client.joinById<WorldState>(serverInfo.roomId, { token, name, color, classType: selectedClass, bannerId: selectedBanner });
     next.reconnection.minUptime = 0;
     // The join handshake precedes the first full state packet. Rendering an
     // empty reflected schema here would stop Babylon's render loop.
@@ -93,11 +110,12 @@ async function join() {
     document.body.prepend(view.canvas); view.camera.lowerRadiusLimit = 11; view.engine.resize();
     view.camera.alpha = Math.PI / 2; view.camera.beta = 0.87; view.camera.radius = 23; view.camera.upperRadiusLimit = 36;
     $('welcome').hidden = true; $('hud').hidden = false; $('connection-lost').hidden = true; $('connection').textContent = 'Conectado';
-    $('tutorial').hidden = read('astra-tutorial') === 'done'; document.body.classList.add('playing'); setChat(!touchMode && !document.body.classList.contains('compact')); updateTutorial();
+    document.body.classList.add('playing'); setTutorialVisible(read('astra-tutorial') !== 'done'); setChat(!touchMode && !document.body.classList.contains('compact')); updateTutorial();
     save('astra-name', name); save('astra-color', color);
     room.onStateChange(state => { if (state.players && state.enemies && state.loot) view.state = state; });
     room.onMessage('profile', (p: Profile) => {
-      const previous = profile; profile = p; save('astra-name', p.name);
+      const previous = profile; profile = p; if (previous && previous.classType !== p.classType) { selectedItem = undefined; inventoryFilter = 'all'; view.selected = undefined; } save('astra-name', p.name);
+      if (!p.bannerChoicePending) { selectedBanner = p.bannerId; color = BANNERS[p.bannerId].color; save('astra-banner', p.bannerId); save('astra-color', color); colors(); }
       if (p.classType) { selectedClass = p.classType; save('astra-class', p.classType); updateClassLabel(); }
       updateProfile();
       if (p.classChoicePending) {
@@ -107,9 +125,16 @@ async function join() {
           document.querySelectorAll('input[name="migration"]').forEach(r => r.addEventListener('change', describe)); describe();
           $('confirm-class').onclick = () => send('chooseClass', document.querySelector<HTMLInputElement>('input[name="migration"]:checked')!.value);
         }
-      } else if (previous?.classChoicePending && panel === 'migration') $<HTMLDialogElement>('modal').close();
+      } else if (p.bannerChoicePending) {
+        if (panel !== 'banner-migration' || !$<HTMLDialogElement>('modal').open) {
+          open('Elige tu estandarte', `<p>Tu estandarte define tus aliados, tus rivales y tu casa comercial. Esta elección gratuita conserva tu clase y todo tu progreso.</p><fieldset class="banner-fieldset"><legend>Tu bando definitivo</legend><div class="banner-options">${bannerChoices('migration-banner')}</div></fieldset><p>Dentro de la aldea estás protegido. Fuera, otros estandartes podrán atacarte.</p><button id="confirm-banner" class="primary">Confirmar estandarte</button>`, 'banner-migration');
+          $('confirm-banner').onclick = () => send('chooseBanner', document.querySelector<HTMLInputElement>('input[name="migration-banner"]:checked')!.value);
+        }
+      } else if ((previous?.classChoicePending || previous?.bannerChoicePending) && ['migration', 'banner-migration'].includes(panel)) $<HTMLDialogElement>('modal').close();
     });
-    room.onMessage('notice', (message: string) => { toast(message); if ($<HTMLDialogElement>('modal').open) $('modal-health').textContent = message; });
+    room.onMessage('notice', (message: string) => toast(message));
+    room.onMessage('elara', () => elaraDialog());
+    room.onMessage('shop', () => { inventory(); $<HTMLDetailsElement>('shop-catalog').open = true;  });
     room.onMessage('chat', (message: { name: string; text: string; system: boolean }) => {
       const line = document.createElement('p'); line.className = message.system ? 'system' : '';
       const name = document.createElement('b'); name.textContent = message.system ? '✧ ' : `${message.name}: `; line.append(name, document.createTextNode(message.text));
@@ -136,23 +161,37 @@ async function join() {
 }
 $('join-form').addEventListener('submit', e => { e.preventDefault(); void join(); });
 $('retry').onclick = () => void join();
-$('dismiss-tutorial').onclick = () => { $('tutorial').hidden = true; save('astra-tutorial', 'done'); };
-view.onSelect = id => { view.selected = id; };
+$('dismiss-tutorial').onclick = () => { setTutorialVisible(false); save('astra-tutorial', 'done'); };
+view.onSelect = ref => { if (!ref || validTarget(ref)) view.selected = ref; else toast('Ese personaje es aliado o está protegido por la aldea.'); };
 view.onGround = (x, z) => { if (canPlay()) { send('go', { x, z }); advanceTutorial(0); } };
 function isTyping() { return !!document.activeElement?.matches('input, textarea, select, [contenteditable="true"]'); }
-function canPlay() { return connected && view.playing && !profile?.classChoicePending && !document.hidden && !$<HTMLDialogElement>('modal').open && !isTyping() && !document.body.classList.contains('menu-open') && (view.state?.players.get(view.selfId)?.hp ?? 0) > 0; }
+function canPlay() { return connected && view.playing && !profile?.classChoicePending && !profile?.bannerChoicePending && !document.hidden && !$<HTMLDialogElement>('modal').open && !isTyping() && !document.body.classList.contains('menu-open') && (view.state?.players.get(view.selfId)?.hp ?? 0) > 0; }
+function targetEntity(ref?: TargetRef) { return ref?.type === 'player' ? view.state?.players.get(ref.id) : ref ? view.state?.enemies.get(ref.id) : undefined; }
+function validTarget(ref: TargetRef) {
+  const entity = targetEntity(ref), me = view.state?.players.get(view.selfId);
+  if (!entity || !me || entity.hp <= 0 || isSafeZone(entity)) return false;
+  if (ref.type === 'enemy') return true;
+  const player = view.state!.players.get(ref.id)!;
+  return !isSafeZone(me) && player.connected && player.ready && player.bannerId !== me.bannerId && ref.id !== view.selfId;
+}
 function selectNext() {
   const p = view.state?.players.get(view.selfId); if (!p) return;
-  const targets = [...view.state!.enemies.entries()].filter(([, e]) => {
+  const refs: TargetRef[] = [...view.state!.enemies.keys()].map(id => ({ type: 'enemy', id }));
+  refs.push(...[...view.state!.players.keys()].map(id => ({ type: 'player' as const, id })));
+  const targets = refs.filter(ref => {
+    if (!validTarget(ref)) return false;
+    const e = targetEntity(ref)!;
     const screen = view.project(e.x, 1, e.z);
     return e.hp > 0 && Math.hypot(p.x - e.x, p.z - e.z) < 20 && screen.visible && screen.x > 0 && screen.x < view.canvas.clientWidth && screen.y > 0 && screen.y < view.canvas.clientHeight;
-  }).sort((a, b) => Math.hypot(p.x - a[1].x, p.z - a[1].z) - Math.hypot(p.x - b[1].x, p.z - b[1].z));
-  const index = targets.findIndex(([id]) => id === view.selected); view.selected = targets[(index + 1) % targets.length]?.[0] || '';
+  }).sort((a, b) => Number(a.type === 'player') - Number(b.type === 'player') || Math.hypot(p.x - targetEntity(a)!.x, p.z - targetEntity(a)!.z) - Math.hypot(p.x - targetEntity(b)!.x, p.z - targetEntity(b)!.z));
+  const index = targets.findIndex(ref => sameTarget(ref, view.selected)); view.selected = targets[(index + 1) % targets.length];
   if (!view.selected) toast('No hay enemigos visibles cerca.');
 }
 function act(kind: string, fromInventory = false) {
   if (!connected || (!fromInventory && !canPlay())) return;
   if ((profile?.cooldowns[kind] ?? 0) > (view.state?.time ?? 0)) return;
+  const me = view.state?.players.get(view.selfId);
+  if (me && isSafeZone(me) && ['attack', 'nova'].includes(kind)) return toast('Zona segura: sal de la aldea para atacar.');
   if (kind === 'attack') {
     if (performance.now() - lastAttackSent < 200) return;
     lastAttackSent = performance.now();
@@ -171,7 +210,15 @@ function stopMovement() {
   input.reset(); touch.reset(); view.gestures.reset(); send('stop');
   $('run-toggle').setAttribute('aria-pressed', 'false');
 }
-function interact() { if (canPlay()) { send('interact'); const p = view.state?.players.get(view.selfId); if (p && Math.hypot(p.x - NPC.x, p.z - NPC.z) <= 4) advanceTutorial(1); } }
+function interact() { if (canPlay()) { send('interact'); const p = view.state?.players.get(view.selfId), npc = view.state?.elara; if (p && npc && Math.hypot(p.x - npc.x, p.z - npc.z) <= 4) advanceTutorial(1); } }
+function elaraDialog() {
+  open('Elara · Guardiana del valle', '<p>Elara recorre las casas y se detiene para escucharte. Tu misión y tus recompensas pertenecen a la clase que estás usando.</p><p>Al despedirte, esperará un momento antes de seguir su camino.</p><button id="elara-continue" class="primary">Consultar o entregar misión</button><button id="elara-claim" class="secondary">Reclamar recompensas pendientes</button><button id="elara-house" class="secondary">Abrir mi casa</button><button id="elara-bye" class="secondary">Despedirme</button>', 'elara');
+  $('elara-continue').onclick = () => send('interact', { op: 'talk' });
+  $('elara-claim').onclick = () => send('interact', { op: 'claim' });
+  $('elara-house').onclick = () => send('interact', { op: 'house' });
+  $('elara-bye').onclick = () => $<HTMLDialogElement>('modal').close();
+}
+setInterval(() => { if (connected && !document.hidden && $<HTMLDialogElement>('modal').open && ['elara', 'inventory'].includes(panel)) send('talk', true); }, 1000);
 document.querySelectorAll<HTMLButtonElement>('[data-action]').forEach(b => b.onclick = e => {
   if (b.id !== 'attack' || e.detail === 0) act(b.dataset.action!);
 });
@@ -198,7 +245,7 @@ function updateTutorial() {
   const move = touchMode ? 'Arrastra el joystick izquierdo para moverte.' : `Muévete con ${keyLabel(preferences.bindings.forward)}${keyLabel(preferences.bindings.left)}${keyLabel(preferences.bindings.back)}${keyLabel(preferences.bindings.right)} o haz clic en el suelo.`;
   $('tutorial-text').textContent = [move, touchMode ? 'Busca a Elara y toca «Hablar con Elara» para aceptar tu misión.' : `Busca a Elara y usa ${keyLabel(preferences.bindings.interact)} para aceptar tu misión.`, touchMode ? 'Toca un enemigo del bosque y mantén Ataque. Arrastra el mundo para orientar la cámara.' : `Selecciona un enemigo y mantén ${keyLabel(preferences.bindings.attack)} para atacar.`][Math.min(2, tutorialStep)];
 }
-function advanceTutorial(step: number) { if (tutorialStep === step) { tutorialStep++; updateTutorial(); if (tutorialStep > 2) { $('tutorial').hidden = true; save('astra-tutorial', 'done'); } } }
+function advanceTutorial(step: number) { if (tutorialStep === step) { tutorialStep++; updateTutorial(); if (tutorialStep > 2) { setTutorialVisible(false); save('astra-tutorial', 'done'); } } }
 function applyPreferences(graphics = true) {
   if (preferences.controls !== 'auto') touchMode = preferences.controls === 'touch';
   document.body.classList.toggle('touch-controls', touchMode);
@@ -248,7 +295,7 @@ window.addEventListener('keydown', e => {
     preferences.bindings[rebinding] = e.code; rebinding = undefined; persistPreferences(); renderBindings(); return;
   }
   if ($<HTMLDialogElement>('modal').open) return;
-  if (e.code === 'Escape') { stopMovement(); if (isTyping() || touchMode && !$('chat-panel').hidden) setChat(false); else if (document.body.classList.contains('menu-open')) closeMenu(); else view.selected = ''; view.canvas.focus({ preventScroll: true }); return; }
+  if (e.code === 'Escape') { stopMovement(); if (isTyping() || touchMode && !$('chat-panel').hidden) setChat(false); else if (document.body.classList.contains('menu-open')) closeMenu(); else view.selected = undefined; view.canvas.focus({ preventScroll: true }); return; }
   if (!connected || !view.playing || isTyping()) return;
   // Preserve Tab, Space and Enter behavior for focused buttons and all menus.
   if (document.body.classList.contains('menu-open') || document.activeElement?.closest('button, nav') && ['Space', 'Enter', 'Tab'].includes(e.code)) return;
@@ -313,7 +360,7 @@ function updateProfile() {
   updateAbilities();
   const quest = QUESTS[profile.quest];
   $('quest-title').textContent = quest?.title ?? 'El valle vuelve a brillar';
-  $('quest-summary').textContent = !quest ? 'Tu aventura ha dejado huella en Auralia.' : !profile.questAccepted ? 'Habla con Elara junto al santuario para aceptar esta misión.' : questReady(profile) ? 'Regresa con Elara para recibir tu recompensa.' : quest.text;
+  $('quest-summary').textContent = !quest ? 'Tu aventura ha dejado huella en Auralia.' : !profile.questAccepted ? 'Busca a Elara en el mapa para aceptar esta misión.' : questReady(profile) ? 'Regresa con Elara para recibir tu recompensa.' : quest.text;
   $('quest-objectives').innerHTML = quest && profile.questAccepted ? objectives(profile) : '';
   $('quest-next').textContent = $('quest-summary').textContent;
   $('quest-reward').innerHTML = quest ? `<span class="gold-dot">◇</span> ${quest.xp} EXP <span>·</span> ${quest.gold} oro` : '<span class="gold-dot">✧</span> Historia completada';
@@ -333,19 +380,31 @@ setInterval(() => {
   $('modal-health').textContent = p.hp <= 0 ? 'Has caído · Regresando al santuario' : `Vida: ${Math.ceil(p.hp)} / ${p.maxHp}`;
   $('modal-live').classList.toggle('danger', p.hp / p.maxHp < .3);
   if (p.hp <= 0 && !wasDead) stopMovement(); wasDead = p.hp <= 0;
-  const zone = p.z > 5 ? 'ALDEA DE AURALIA' : p.z > -25 ? 'BOSQUE DE LOS ECOS' : 'RUINAS DEL UMBRAL';
-  $('zone').textContent = zone; $('zone-safety').textContent = p.z > 5 ? 'Zona segura' : p.z > -25 ? 'Territorio silvestre' : 'Zona de élite';
+  const zone = isSafeZone(p) ? 'ALDEA DE AURALIA' : p.z > -25 ? 'BOSQUE DE LOS ECOS' : 'RUINAS DEL UMBRAL';
+  $('zone').textContent = zone; $('zone-safety').textContent = isSafeZone(p) ? 'Zona segura' : 'PvP entre estandartes';
+  $('zone-banner').textContent = isSafeZone(p) ? 'Aldea · Zona segura' : 'Territorio de combate · PvP';
+  $('zone-banner').classList.toggle('pvp', !isSafeZone(p));
   const count = state.players.size; $('online-count').textContent = `${count} aventurero${count > 1 ? 's' : ''}`;
   const friends = [...state.players.entries()].filter(([id]) => id !== view.selfId);
-  const html = (friends.length ? friends.map(([, f]) => `<div class="party-player panel"><span class="party-dot" style="background:${COLORS.includes(f.color) ? f.color : COLORS[0]}"></span><div><strong>${esc(f.name)} <small>NV. ${f.level}</small></strong><div class="party-health"><i style="width:${f.hp / f.maxHp * 100}%"></i></div></div><span class="muted">${f.connected ? '●' : '◌'}</span></div>`).join('') : '<p class="panel party-empty">Invita a alguien para explorar juntos.</p>');
+  const html = (friends.length ? friends.map(([, f]) => `<div class="party-player panel"><span class="party-dot" style="background:${COLORS.includes(f.color) ? f.color : COLORS[0]}"></span><div><strong>${esc(f.name)} <small>NV. ${f.level}</small></strong><small>${BANNERS[isBanner(f.bannerId) ? f.bannerId : 'crimson'].name} · ${f.bannerId === p.bannerId ? 'Aliado' : 'Rival'}</small><div class="party-health"><i style="width:${f.hp / f.maxHp * 100}%"></i></div></div><span class="muted">${f.connected ? '●' : '◌'}</span></div>`).join('') : '<p class="panel party-empty">Invita a alguien para explorar juntos.</p>');
   if (html !== partyHTML) { $('party').innerHTML = html; partyHTML = html; }
-  const enemy = state.enemies.get(view.selected); $('target').hidden = !enemy || enemy.hp <= 0;
-  if (enemy && enemy.hp <= 0) view.selected = '';
-  if (enemy) { const range = CHARACTER_CLASSES[profile?.classType ?? selectedClass].range + (enemy.kind === 'warden' ? 1 : 0); const outside = Math.hypot(p.x - enemy.x, p.z - enemy.z) > range; $('target').classList.toggle('out-of-range', outside); $('target').setAttribute('aria-label', outside ? 'Objetivo fuera de alcance' : 'Objetivo dentro de alcance'); $('target-name').textContent = ENEMIES[enemy.kind as EnemyKind].name; $('target-kind').textContent = enemy.kind === 'warden' ? 'ÉLITE · RUINAS DEL UMBRAL' : 'CRIATURA DEL VALLE'; $('target-hp').style.width = `${enemy.hp / enemy.maxHp * 100}%`; $('target-value').textContent = `${Math.ceil(enemy.hp)} / ${enemy.maxHp}`; }
-  const nearNPC = Math.hypot(p.x - NPC.x, p.z - NPC.z) <= 4;
+  if (view.selected && !validTarget(view.selected)) view.selected = undefined;
+  const enemy = targetEntity(view.selected); $('target').hidden = !enemy;
+  if (enemy) {
+    const boss = 'kind' in enemy && enemy.kind === 'warden', range = CHARACTER_CLASSES[profile?.classType ?? selectedClass].range + (boss ? 1 : 0);
+    const outside = Math.hypot(p.x - enemy.x, p.z - enemy.z) > range; $('target').classList.toggle('out-of-range', outside); $('target').setAttribute('aria-label', outside ? 'Objetivo fuera de alcance' : 'Objetivo dentro de alcance');
+    if ('bannerId' in enemy) { const b = BANNERS[isBanner(enemy.bannerId) ? enemy.bannerId : 'crimson']; $('target-name').textContent = enemy.name; $('target-kind').textContent = `Rival · ${CHARACTER_CLASSES[enemy.classType as CharacterClass].name} · ${b.emblem} ${b.name}`; }
+    else { $('target-name').textContent = ENEMIES[enemy.kind as EnemyKind].name; $('target-kind').textContent = boss ? 'ÉLITE · RUINAS DEL UMBRAL' : 'CRIATURA DEL VALLE'; }
+    $('target-hp').style.width = `${enemy.hp / enemy.maxHp * 100}%`; $('target-value').textContent = `${Math.ceil(enemy.hp)} / ${enemy.maxHp}`;
+  }
+  const npc = state.elara ?? NPC, nearNPC = Math.hypot(p.x - npc.x, p.z - npc.z) <= 4;
+  document.querySelectorAll<HTMLButtonElement>('[data-switch-class]').forEach(b => b.disabled = b.dataset.switchClass === profile?.classType || !profile || Math.hypot(p.x - houseFor(profile.bannerId).shop.x, p.z - houseFor(profile.bannerId).shop.z) > SHOP_RADIUS);
+  if ($('elara-house') && profile) $<HTMLButtonElement>('elara-house').disabled = Math.hypot(p.x - houseFor(profile.bannerId).shop.x, p.z - houseFor(profile.bannerId).shop.z) > SHOP_RADIUS;
   const nearLoot = [...state.loot.values()].some(l => Math.hypot(p.x - l.x, p.z - l.z) < 3);
-  $('interaction').hidden = !(nearNPC || nearLoot) || p.hp <= 0;
-  $('interaction-text').textContent = nearNPC ? (profile && questReady(profile) ? 'Entregar misión a Elara' : 'Hablar con Elara') : 'Recoger botín';
+  const nearHouse = HOUSES.find(h => Math.hypot(p.x - h.shop.x, p.z - h.shop.z) <= SHOP_RADIUS);
+  $('interaction').hidden = !(nearNPC || nearLoot || nearHouse) || p.hp <= 0;
+  $('interaction-text').textContent = nearNPC ? (profile && questReady(profile) ? 'Entregar misión a Elara' : 'Hablar con Elara') : nearHouse ? `${nearHouse.bannerId === p.bannerId ? 'Comerciar' : 'Casa de otro bando'} · ${BANNERS[nearHouse.bannerId].name}` : 'Recoger botín';
+  if ($('house-distance') && profile) { const h = houseFor(profile.bannerId); $('house-distance').textContent = `Tu casa ${BANNERS[profile.bannerId].name} · ${Math.ceil(Math.hypot(p.x - h.shop.x, p.z - h.shop.z))} unidades`; }
   $('death').hidden = p.hp > 0; $('death-count').textContent = String(Math.max(0, Math.ceil(p.deadUntil - state.time)));
   for (const kind of ['attack', 'nova', 'heal', 'potion']) {
     const remaining = Math.max(0, (profile?.cooldowns[kind] ?? 0) - state.time); const button = $<HTMLButtonElement>(kind);
@@ -355,12 +414,13 @@ setInterval(() => {
   if ($<HTMLDialogElement>('modal').open && panel === 'map') drawMap($<HTMLCanvasElement>('full-map'));
 }, 100);
 function open(title: string, html: string, type: string) {
+  if (panel === 'elara' && type !== 'elara') send('talk', false);
   if (!$<HTMLDialogElement>('modal').open) previousFocus = document.activeElement as HTMLElement;
   stopMovement(); closeMenu(); panel = type; $('modal-live').hidden = !view.playing; showModal(title, html);
 }
-$('modal').addEventListener('close', () => { rebinding = undefined; stopMovement(); if (profile?.classChoicePending) { send('profile'); return; } if (previousFocus?.isConnected && previousFocus.getClientRects().length) previousFocus.focus({ preventScroll: true }); else view.canvas.focus({ preventScroll: true }); });
-$('modal').addEventListener('cancel', e => { if (profile?.classChoicePending) e.preventDefault(); });
-$('modal-close').addEventListener('click', () => { if (profile?.classChoicePending) send('profile'); });
+$('modal').addEventListener('close', () => { send('talk', false); rebinding = undefined; stopMovement(); if (profile?.classChoicePending || profile?.bannerChoicePending) { send('profile'); return; } if (previousFocus?.isConnected && previousFocus.getClientRects().length) previousFocus.focus({ preventScroll: true }); else view.canvas.focus({ preventScroll: true }); });
+$('modal').addEventListener('cancel', e => { if (profile?.classChoicePending || profile?.bannerChoicePending) e.preventDefault(); });
+$('modal-close').addEventListener('click', () => { if (profile?.classChoicePending || profile?.bannerChoicePending) send('profile'); });
 function refreshPanel(render: () => void) {
   const focused = document.activeElement as HTMLElement | null, id = focused?.id, item = focused?.dataset.item;
   const scroll = $('modal-body').scrollTop, shopOpen = $<HTMLDetailsElement>('shop-catalog')?.open; render();
@@ -372,18 +432,22 @@ let inventoryFilter: ItemCategory | 'all' = 'all';
 function inventory(refresh = false) {
   if (!profile) return toast('Entra al valle para abrir tu inventario.');
   const stats = equipmentStats(profile), list = profile.inventory.filter(i => inventoryFilter === 'all' || ITEMS[i.kind].category === inventoryFilter);
+  const baseHealth = CHARACTER_CLASSES[profile.classType].health + (profile.level - 1) * 25, baseDamage = CHARACTER_CLASSES[profile.classType].abilities.attack.damage + (profile.level - 1) * 5;
   const categories = [['all', 'Todo'], ['weapon', 'Armas'], ['armor', 'Armaduras'], ['accessory', 'Accesorios'], ['consumable', 'Consumibles'], ['material', 'Materiales']];
   const html = `<div class="inventory-summary"><span>${icon('bag')} ${profile.inventory.length}/${INVENTORY_CAPACITY} espacios</span><strong>${profile.gold} ◈</strong></div>
-    <p>${CHARACTER_CLASSES[profile.classType].name} · ${stats.health} vida · +${stats.damage} daño · ${stats.defense} protección</p>
+    <section class="class-switcher"><h3>Clases de tu aventura</h3><p>Cambia junto al puesto de tu casa. Cada clase tiene sus propios niveles, misiones, oro y objetos.</p><div>${Object.entries(CHARACTER_CLASSES).map(([key, def]) => `<button class="secondary" data-switch-class="${key}" ${key === profile!.classType ? 'disabled' : ''}>${def.name}${key === profile!.classType ? ' · Actual' : ''}</button>`).join('')}</div></section>
+    <p>${CHARACTER_CLASSES[profile.classType].name} · ${BANNERS[profile.bannerId].emblem} ${BANNERS[profile.bannerId].name} · Nivel ${profile.level}</p>
+    ${statTiles([['Vida máxima', stats.health, `${baseHealth} base · +${stats.health - baseHealth} por equipo`], ['Daño básico', baseDamage + stats.damage, `${baseDamage} base · +${stats.damage} por equipo`], ['Alcance', CHARACTER_CLASSES[profile.classType].range, 'unidades'], ['Protección', stats.defense, 'reducción por golpe'], ['Recarga', `${CHARACTER_CLASSES[profile.classType].abilities.attack.cooldown} s`]])}
     <div class="equipment-grid">${(['weapon', 'armor', 'accessory'] as const).map((slot, i) => { const key = profile![slot]; return `<div class="equipped"><span>${['ARMA', 'ARMADURA', 'ACCESORIO'][i]}</span><strong>${key === 'starter' ? CHARACTER_CLASSES[profile!.classType].starter : key ? ITEMS[key].name : 'Sin equipar'}</strong>${key && key !== 'starter' ? `<button class="secondary" id="unequip-${slot}" data-unequip="${['starter', 'removeArmor', 'removeAccessory'][i]}">Desequipar</button>` : ''}</div>`; }).join('')}</div>
     ${profile.pendingRewards.length ? `<div class="pending-rewards"><b>Elara guarda tus recompensas</b><p>${profile.pendingRewards.map(i => `${i.count} × ${ITEMS[i.kind].name}`).join(' · ')}</p><button id="claim-rewards" class="secondary">Reclamar junto a Elara</button></div>` : ''}
     <div class="inventory-filters" role="group" aria-label="Filtrar objetos">${categories.map(([key, label]) => `<button id="filter-${key}" class="secondary" data-filter="${key}" aria-pressed="${inventoryFilter === key}">${label}</button>`).join('')}</div>
     <div class="inventory-grid">${list.map((stack, i) => `<button class="item-slot" id="item-${i}" data-item="${stack.kind}" title="${ITEMS[stack.kind].name} · ${ITEMS[stack.kind].rarity}" style="--item-color:${ITEMS[stack.kind].color}"><span>${ITEMS[stack.kind].icon}</span><b>${stack.count}</b><small>${ITEMS[stack.kind].name}</small></button>`).join('') || '<p>No hay objetos en esta categoría.</p>'}</div>
     <div id="item-detail" class="item-detail" aria-live="polite">Selecciona un objeto para comparar, usar o equipar.</div>
-    <div class="shop-row"><p><b>Elara · Suministros</b><br>1 poción por 3 cristales o 15 de oro.<br><small>Acércate a Elara para comprar, vender o intercambiar.</small></p><button id="buy-potion" class="secondary">Comprar poción</button></div>
-    <details id="shop-catalog" class="shop-catalog"><summary>Ver tienda de Elara · 16 objetos</summary>${Object.entries(ITEMS).map(([key, item]) => `<div class="shop-entry"><div><strong>${item.icon} ${item.name}</strong><small>${item.rarity}${item.classType ? ` · ${CHARACTER_CLASSES[item.classType].name}` : ''} · ${item.description}</small></div><div class="shop-actions"><button id="buy-${key}" class="secondary" data-buy="${key}">${item.price} oro${key === 'potion' ? ' / 3 cristales' : ''}</button>${item.fragments ? `<button id="trade-${key}" class="secondary" data-trade="${key}">${item.fragments} fragmentos</button>` : ''}</div></div>`).join('')}</details>`;
+    <div class="shop-row"><p><b>Casa ${BANNERS[profile.bannerId].name} · Suministros</b><br>1 poción por 3 cristales o 15 de oro.<br><small id="house-distance">Acércate a tu casa para comprar, vender o intercambiar.</small></p><button id="find-house" class="secondary">Ver mi casa en el mapa</button><button id="buy-potion" class="secondary">Comprar poción</button></div>
+    <details id="shop-catalog" class="shop-catalog"><summary>Ver suministros para tu clase</summary>${Object.entries(ITEMS).filter(([, item]) => !item.classType || item.classType === profile!.classType).map(([key, item]) => `<div class="shop-entry"><div><strong>${item.icon} ${item.name}</strong><small>${item.rarity}${item.classType ? ` · ${CHARACTER_CLASSES[item.classType].name}` : ''} · ${item.description}</small></div><div class="shop-actions"><button id="buy-${key}" class="secondary" data-buy="${key}">${item.price} oro${key === 'potion' ? ' / 3 cristales' : ''}</button>${item.fragments ? `<button id="trade-${key}" class="secondary" data-trade="${key}">${item.fragments} fragmentos</button>` : ''}</div></div>`).join('')}</details>`;
   if (!refresh) selectedItem = undefined;
   if (refresh) $('modal-body').innerHTML = html; else open('Tu inventario', html, 'inventory');
+  document.querySelectorAll<HTMLButtonElement>('[data-switch-class]').forEach(b => b.onclick = () => { view.selected = undefined; send('switchClass', b.dataset.switchClass); });
   function detail(kind: ItemKind) {
     selectedItem = kind; const item = ITEMS[kind], owned = profile?.inventory.some(i => i.kind === kind);
     document.querySelectorAll<HTMLElement>('[data-item]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.item === kind)));
@@ -397,8 +461,8 @@ function inventory(refresh = false) {
     }
     $('item-detail').innerHTML = `<strong>${item.icon} ${item.name}</strong><p>${item.rarity}${item.classType ? ` · ${CHARACTER_CLASSES[item.classType].name}` : ' · Todas las clases'}</p><p>${item.description}</p>${comparison}
       ${!owned ? '<p>Ya no tienes este objeto.</p>' : !compatible ? `<p>Requiere la clase ${CHARACTER_CLASSES[item.classType!].name}.</p>` : isEquipment ? `<button id="use-item" class="secondary" ${equipped ? 'disabled' : ''}>${equipped ? 'Equipado' : 'Equipar'}</button>` : item.category === 'consumable' ? `<button id="select-consumable" class="secondary" ${profile!.consumable === kind ? 'disabled' : ''}>${profile!.consumable === kind ? 'En el botón rápido' : 'Asignar al botón rápido'}</button><button id="use-item" class="secondary">Usar ${item.name.toLowerCase()}</button>` : ''}
-      ${owned && isEquipment && (!equipped || profile!.inventory.filter(i => i.kind === kind).length > 1) ? `<button id="sell-item" class="secondary">Vender una copia con Elara · ${Math.floor(item.price / 4)} oro</button>` : ''}
-      ${owned && profile!.legacyExchange && profile!.classType !== 'knight' && (profile!.legacyWeapons[kind as 'iron' | 'astral'] ?? 0) > 0 ? '<button id="exchange-item" class="secondary">Cambiar por arma de mi clase · Gratis con Elara</button>' : ''}`;
+      ${owned && isEquipment && (!equipped || profile!.inventory.filter(i => i.kind === kind).length > 1) ? `<button id="sell-item" class="secondary">Vender una copia en mi casa · ${Math.floor(item.price / 4)} oro</button>` : ''}
+      ${owned && profile!.legacyExchange && profile!.classType !== 'knight' && (profile!.legacyWeapons[kind as 'iron' | 'astral'] ?? 0) > 0 ? '<button id="exchange-item" class="secondary">Cambiar por arma de mi clase · Gratis en mi casa</button>' : ''}`;
     if ($('use-item')) $('use-item').onclick = () => { if (item.category === 'consumable') { send('equip', kind); act('potion', true); } else send('equip', kind); };
     if ($('select-consumable')) $('select-consumable').onclick = () => send('equip', kind);
     if ($('sell-item')) $('sell-item').onclick = () => send('interact', { op: 'sell', kind });
@@ -411,7 +475,8 @@ function inventory(refresh = false) {
   document.querySelectorAll<HTMLButtonElement>('[data-buy]').forEach(b => b.onclick = () => send('interact', { op: 'buy', kind: b.dataset.buy }));
   document.querySelectorAll<HTMLButtonElement>('[data-trade]').forEach(b => b.onclick = () => send('interact', { op: 'trade', kind: b.dataset.trade }));
   if ($('claim-rewards')) $('claim-rewards').onclick = () => send('interact', { op: 'claim' });
-  $('buy-potion').onclick = () => { const p = view.state?.players.get(view.selfId); if (!p || Math.hypot(p.x - NPC.x, p.z - NPC.z) > 4) toast('Acércate a Elara para comprar una poción.'); else send('interact', 'buy'); };
+  $('buy-potion').onclick = () => send('interact', 'buy');
+  $('find-house').onclick = map;
 }
 function journal(refresh = false) {
   if (!profile) return toast('Entra al valle para consultar tus misiones.');
@@ -421,19 +486,20 @@ function journal(refresh = false) {
 function drawMap(canvas: HTMLCanvasElement) {
   if (!canvas) return; const ctx = canvas.getContext('2d')!; const w = canvas.width, h = canvas.height;
   const sx = (x: number) => (40 - x) / 80 * w, sz = (z: number) => (z + 46) / 82 * h;
-  ctx.fillStyle = '#314f45'; ctx.fillRect(0, 0, w, h); ctx.fillStyle = '#577158'; ctx.fillRect(0, sz(5), w, h - sz(5)); ctx.fillStyle = '#526964'; ctx.fillRect(0, 0, w, sz(-26));
+  ctx.fillStyle = '#314f45'; ctx.fillRect(0, 0, w, h); ctx.fillStyle = '#577158'; ctx.fillRect(0, sz(SAFE_ZONE_Z), w, h - sz(SAFE_ZONE_Z)); ctx.fillStyle = '#526964'; ctx.fillRect(0, 0, w, sz(-26));
   ctx.strokeStyle = '#afaa82'; ctx.lineWidth = w / 25; ctx.beginPath(); ctx.moveTo(sx(0), sz(30)); ctx.lineTo(sx(0), sz(-40)); ctx.stroke();
   ctx.fillStyle = '#b9b797'; ctx.beginPath(); ctx.ellipse(sx(0), sz(14), w / 10, h / 10, 0, 0, Math.PI * 2); ctx.fill();
-  for (const o of OBSTACLES) { ctx.fillStyle = o.kind === 'house' ? '#d1b784' : o.kind === 'tree' ? '#294d40' : '#92a390'; if (o.kind === 'house') ctx.fillRect(sx(o.x) - w / 30, sz(o.z) - h / 32, w / 15, h / 16); else { ctx.beginPath(); ctx.arc(sx(o.x), sz(o.z), o.kind === 'tree' ? w / 70 : w / 100, 0, Math.PI * 2); ctx.fill(); } }
+  for (const o of OBSTACLES) { ctx.fillStyle = o.kind === 'house' ? BANNERS[HOUSES[o.variant].bannerId].color : o.kind === 'tree' ? '#294d40' : '#92a390'; if (o.kind === 'house') { ctx.fillRect(sx(o.x) - w / 30, sz(o.z) - h / 32, w / 15, h / 16); ctx.strokeStyle = HOUSES[o.variant].bannerId === profile?.bannerId ? '#fff6c9' : '#bbc4ad'; ctx.lineWidth = HOUSES[o.variant].bannerId === profile?.bannerId ? 3 : 1; ctx.strokeRect(sx(o.x) - w / 30, sz(o.z) - h / 32, w / 15, h / 16); } else { ctx.beginPath(); ctx.arc(sx(o.x), sz(o.z), o.kind === 'tree' ? w / 70 : w / 100, 0, Math.PI * 2); ctx.fill(); } }
+  ctx.strokeStyle = '#f9dda0'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(0, sz(SAFE_ZONE_Z)); ctx.lineTo(w, sz(SAFE_ZONE_Z)); ctx.stroke(); ctx.setLineDash([]);
   const dot = (x: number, z: number, color: string, size: number) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(sx(x), sz(z), size, 0, Math.PI * 2); ctx.fill(); };
   view.state?.enemies.forEach(e => { if (e.hp > 0) dot(e.x, e.z, e.kind === 'warden' ? '#edb56e' : '#d38c76', e.kind === 'warden' ? 4 : 2.2); });
   view.state?.loot.forEach(l => dot(l.x, l.z, '#ffe3a1', 2));
-  dot(NPC.x, NPC.z, '#ffe29b', 3);
-  view.state?.players.forEach((p, id) => { if (id === view.selfId) { ctx.save(); ctx.translate(sx(p.x), sz(p.z)); ctx.rotate(p.yaw); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(0, 7); ctx.lineTo(-4.5, -5); ctx.lineTo(0, -2); ctx.lineTo(4.5, -5); ctx.closePath(); ctx.fill(); ctx.restore(); } else dot(p.x, p.z, '#7ce1d1', 4); });
+  const npc = view.state?.elara ?? NPC; dot(npc.x, npc.z, '#ffe29b', 3);
+  view.state?.players.forEach((p, id) => { if (id === view.selfId) { ctx.save(); ctx.translate(sx(p.x), sz(p.z)); ctx.rotate(p.yaw); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(0, 7); ctx.lineTo(-4.5, -5); ctx.lineTo(0, -2); ctx.lineTo(4.5, -5); ctx.closePath(); ctx.fill(); ctx.restore(); } else dot(p.x, p.z, BANNERS[isBanner(p.bannerId) ? p.bannerId : 'crimson'].color, 4); });
   ctx.font = `${w > 300 ? 14 : 9}px sans-serif`; ctx.fillStyle = '#e7e6cd'; ctx.textAlign = 'center'; ctx.fillText('N', w / 2, 13);
-  if (w > 300) { ctx.fillText('RUINAS DEL UMBRAL', w / 2, sz(-42)); ctx.fillText('BOSQUE DE LOS ECOS', w * 0.7, sz(-9)); ctx.fillText('ALDEA DE AURALIA', w / 2, sz(29)); }
+  if (w > 300) { ctx.fillText('RUINAS DEL UMBRAL', w / 2, sz(-42)); ctx.fillText('BOSQUE DE LOS ECOS', w * 0.7, sz(-9)); ctx.fillText('ALDEA DE AURALIA', w / 2, sz(29)); ctx.fillStyle = '#fff2c5'; ctx.fillText('Elara', sx(npc.x), sz(npc.z) - 8); }
 }
-function map() { open('El valle de Auralia', '<canvas id="full-map" width="600" height="500" aria-label="Mapa completo del valle"></canvas><div class="map-legend"><span>▲ Tú</span><span class="jade">● Compañeros</span><span class="gold-dot">● Elara / Élite</span><span class="danger">● Criaturas</span></div><p class="modal-note">Sigue el camino hacia el norte para llegar al bosque y las ruinas.</p>', 'map'); drawMap($<HTMLCanvasElement>('full-map')); }
+function map() { open('El valle de Auralia', `<canvas id="full-map" width="600" height="500" aria-label="Mapa completo del valle"></canvas><div class="map-legend"><span>▲ Tú</span><span>— Límite de zona segura</span><span>● Elara / Élite</span><span>● Criaturas</span></div><div class="house-legend">${HOUSES.map(h => `<span style="--swatch:${BANNERS[h.bannerId].color}">${BANNERS[h.bannerId].emblem} ${BANNERS[h.bannerId].name}${profile?.bannerId === h.bannerId ? ' · Tu casa (borde claro)' : ''}</span>`).join('')}</div><p id="house-distance"></p><p class="modal-note">En la aldea no hay ataques. En el bosque y las ruinas otros estandartes son rivales.</p>`, 'map'); drawMap($<HTMLCanvasElement>('full-map')); }
 $('inventory-button').onclick = () => inventory(); $('journal-button').onclick = () => journal(); $('quest-open').onclick = () => journal();
 $('map-button').onclick = map; $('open-map').onclick = map;
 $('invite').onclick = async () => {
@@ -478,7 +544,7 @@ function settings() {
   }
   $('quality').onchange = () => { preferences.quality = $<HTMLSelectElement>('quality').value as Preferences['quality']; persistPreferences(); };
   $('reset-preferences').onclick = () => { rebinding = undefined; preferences = defaults(); touchMode = matchMedia('(any-pointer: coarse)').matches; persistPreferences(); settings(); };
-  $('show-tutorial').onclick = () => { tutorialStep = 0; save('astra-tutorial', ''); $('tutorial').hidden = false; updateTutorial(); $<HTMLDialogElement>('modal').close(); };
+  $('show-tutorial').onclick = () => { tutorialStep = 0; save('astra-tutorial', ''); setTutorialVisible(true); updateTutorial(); $<HTMLDialogElement>('modal').close(); };
   $('export-access').onclick = () => {
     const blob = new Blob([JSON.stringify({ game: 'astra', token, name: profile?.name || $<HTMLInputElement>('name').value || 'Viajero' }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = 'astra-acceso.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);

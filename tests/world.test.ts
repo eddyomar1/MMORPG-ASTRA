@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { CharacterStore } from '../server/database.js';
 import { GameWorld } from '../server/world.js';
 import { LootState } from '../shared/schema.js';
+import { houseFor } from '../shared/banners.js';
 import { CLASS_WEAPONS, COLORS, ENEMIES, NPC, WORLD, canStand, type CharacterClass, type EnemyKind } from '../shared/content.js';
 
 const token = 'a'.repeat(64);
@@ -59,7 +60,8 @@ test('potions, healing and shops validate health, stock, payment and distance', 
   world.action('alice', { kind: 'potion' }); assert.equal(player.hp, 75);
   world.equip('alice', 'astral'); assert.equal(profile.weapon, 'starter');
   profile.gold = 15; player.x = 0; player.z = -20; world.interact('alice', 'buy'); assert.equal(profile.gold, 15);
-  player.x = NPC.x; player.z = NPC.z; world.interact('alice', 'buy'); assert.equal(profile.gold, 0); assert.equal(profile.inventory[0].count, 5);
+  player.x = world.state.elara.x; player.z = world.state.elara.z; world.interact('alice', 'buy'); assert.equal(profile.gold, 15);
+  Object.assign(player, houseFor(profile.bannerId).shop); world.interact('alice', 'buy'); assert.equal(profile.gold, 0); assert.equal(profile.inventory[0].count, 5);
   world.interact('alice', 'buy'); assert.equal(profile.inventory[0].count, 5);
 });
 test('cooperative contributors receive rewards and uninvolved players do not', t => {
@@ -80,7 +82,7 @@ test('enemy death, despawn timer and player resurrection complete correctly', t 
 });
 for (const classType of ['knight', 'mage', 'archer'] as const) test(`${classType}: all three quest chapters can be completed, awarded once and reach level 5`, t => {
   const { world, player, profile } = setup(t, classType);
-  const talk = () => { player.x = NPC.x; player.z = NPC.z; world.interact('alice'); };
+  const talk = () => { player.x = world.state.elara.x; player.z = world.state.elara.z; world.interact('alice'); };
   const kill = (kind: EnemyKind) => {
     const [id, enemy] = [...world.state.enemies.entries()].find(([, e]) => e.kind === kind)!;
     enemy.hp = ENEMIES[kind].hp; enemy.x = 0; enemy.z = -5; player.x = 0; player.z = -3;
