@@ -8,9 +8,35 @@ Estos pasos se realizan en el **PC que hará de servidor**. Los amigos que se co
 
 ### 1. Instalar y comprobar los requisitos
 
-- Instala **Node.js 24**, con npm, desde la [página oficial de Node.js](https://nodejs.org/en/download). Es la versión de referencia del proyecto, indicada también en `.nvmrc`.
-- Instala [Git para tu sistema operativo](https://git-scm.com/install/) para clonar el repositorio.
-- Usa un navegador con WebGL y aceleración gráfica habilitada.
+El repositorio incluye un preparador automático para **Windows 10/11** y para **Debian, Ubuntu, Linux Mint y distribuciones derivadas de Debian**. Revisa e instala o actualiza Git, Node.js 24 con npm y Cloudflare Tunnel; después ejecuta `npm ci`, compila el proyecto y configura los hooks locales de Git. Puedes repetirlo cuando actualices el repositorio. No inicia el servidor ni modifica `data/`.
+
+En Windows, abre PowerShell o Símbolo del sistema dentro de la carpeta y ejecuta:
+
+```bat
+setup-windows.cmd
+```
+
+El script usa **WinGet**, incluido normalmente mediante App Installer en Windows moderno. Puede mostrar la ventana de permisos de administrador de un instalador. Si todavía no tienes Git, descarga el repositorio como ZIP, descomprímelo y ejecuta el preparador desde esa carpeta; después podrás clonar normalmente.
+
+En Debian o una distribución compatible, abre una terminal dentro de la carpeta y ejecuta:
+
+```sh
+bash setup-debian.sh
+```
+
+El instalador usa `apt` y pedirá la contraseña de `sudo` cuando corresponda. Node.js 24 se obtiene mediante el repositorio de NodeSource y Cloudflare Tunnel se guarda en `.local/bin/`, solo para este proyecto.
+
+Para comprobar los requisitos sin instalar, actualizar, descargar ni compilar:
+
+```sh
+# Debian y derivados
+bash setup-debian.sh --check
+
+# Windows (PowerShell o CMD)
+setup-windows.cmd -CheckOnly
+```
+
+Al terminar la preparación automática, pasa directamente al [paso 3](#3-arrancar-y-abrir-el-juego). Si prefieres hacerlo manualmente, instala **Node.js 24** con npm desde la [página oficial de Node.js](https://nodejs.org/en/download), instala [Git](https://git-scm.com/install/) y usa un navegador con WebGL y aceleración gráfica habilitada.
 
 Abre una terminal: PowerShell o Símbolo del sistema en Windows, Terminal en macOS o tu terminal habitual en Linux. Si acabas de instalar Node.js o Git, abre una terminal nueva. Comprueba:
 
@@ -22,7 +48,7 @@ git --version
 
 `node --version` debe mostrar `v24.x.x` para seguir esta guía con la versión de referencia; los otros dos comandos deben mostrar sus versiones sin errores. Si ya usas nvm en Linux/macOS, después de entrar en la carpeta del proyecto puedes ejecutar `nvm install` y `nvm use` para utilizar `.nvmrc`.
 
-### 2. Clonar e instalar
+### 2. Clonar e instalar manualmente
 
 Copia la URL HTTPS de este repositorio desde tu proveedor de Git (por ejemplo, desde el botón Code en GitHub). **Sustituye `URL_DEL_REPOSITORIO` por esa URL real** antes de ejecutar:
 
@@ -96,6 +122,9 @@ Una vez instaladas las dependencias, la partida y todos sus recursos funcionan e
 
 | Problema | Qué comprobar |
 | --- | --- |
+| `winget` no se reconoce al ejecutar el preparador de Windows | Instala o actualiza **App Installer** desde Microsoft Store, abre una terminal nueva y repite `setup-windows.cmd`. |
+| El preparador de Debian rechaza la distribución | El script automático admite Debian y derivadas con `apt`. Sigue la instalación manual en otra distribución. |
+| El preparador de Debian no puede usar `sudo` | Ejecútalo con una cuenta que pueda administrar paquetes o pide al administrador que instale Git, Node.js 24 y `curl`. |
 | `node`, `npm` o `git` no se reconoce | Instala la herramienta correspondiente y abre una terminal nueva. Repite la comprobación de versiones. |
 | PowerShell bloquea `npm.ps1` | Usa `npm.cmd ci` y `npm.cmd run play` en PowerShell, o ejecuta los comandos originales desde Símbolo del sistema. |
 | Error `ENOENT` relacionado con `package.json` | Entra con `cd` en la carpeta clonada, donde están `package.json` y `package-lock.json`. |
